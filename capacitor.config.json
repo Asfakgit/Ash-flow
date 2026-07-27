@@ -1,0 +1,8 @@
+{
+  "appId": "com.ashflow.money",
+  "appName": "Ash-Flow",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
