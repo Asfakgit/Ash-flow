@@ -31,28 +31,126 @@ export const getDataRows = (transactions = []) => {
 };
 
 // =======================
-// GET ALL TRANSACTIONS (SUPABASE)
+// OFFLINE STORAGE & SYNC ENGINE
+// =======================
+const CACHE_KEY = "money_app_transactions_cache";
+const QUEUE_KEY = "money_app_offline_queue";
+
+export const getCachedTransactions = () => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    console.error("Failed to read cache:", err);
+    return [];
+  }
+};
+
+export const setCachedTransactions = (data = []) => {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch (err) {
+    console.error("Failed to write cache:", err);
+  }
+};
+
+export const getOfflineQueue = () => {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    return [];
+  }
+};
+
+export const saveOfflineQueue = (queue = []) => {
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  } catch (err) {
+    console.error("Failed to save offline queue:", err);
+  }
+};
+
+export const addToOfflineQueue = (item) => {
+  const queue = getOfflineQueue();
+  queue.push(item);
+  saveOfflineQueue(queue);
+};
+
+let isSyncing = false;
+
+export const syncOfflineQueue = async () => {
+  if (isSyncing || typeof navigator !== "undefined" && !navigator.onLine) return;
+  const queue = getOfflineQueue();
+  if (!queue || queue.length === 0) return;
+
+  isSyncing = true;
+  console.log(`📡 Online detected: Syncing ${queue.length} offline actions to Supabase...`);
+
+  const remainingQueue = [];
+  for (const item of queue) {
+    try {
+      if (item.action === "add") {
+        await supabase.from("transactions").insert([item.payload]);
+      } else if (item.action === "update") {
+        await supabase
+          .from("transactions")
+          .update({
+            person: item.payload.person,
+            amount: item.payload.amount,
+            type: item.payload.type,
+            date: item.payload.date,
+            notes: item.payload.notes,
+            method: item.payload.method,
+          })
+          .eq("id", item.payload.id);
+      } else if (item.action === "delete") {
+        await supabase.from("transactions").delete().eq("id", item.id);
+      }
+    } catch (err) {
+      console.error("Sync item failed:", item, err);
+      remainingQueue.push(item);
+    }
+  }
+
+  saveOfflineQueue(remainingQueue);
+  isSyncing = false;
+};
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    syncOfflineQueue().catch(() => {});
+  });
+}
+
+// =======================
+// GET ALL TRANSACTIONS (SUPABASE + OFFLINE CACHE)
 // =======================
 export const getTransactions = async () => {
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    syncOfflineQueue().catch(() => {});
+  }
+
   try {
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
       .order("id", { ascending: false });
 
-    if (error) {
-      console.error("Supabase fetch error:", error);
-      throw error;
-    }
-    return { data: data || [] };
+    if (error) throw error;
+
+    const list = data || [];
+    setCachedTransactions(list);
+    return { data: list };
   } catch (err) {
-    console.error("Error fetching transactions from Supabase:", err);
-    return { data: [] };
+    console.warn("Offline or network issue: Loading transactions from local cache.", err);
+    const cached = getCachedTransactions();
+    return { data: cached };
   }
 };
 
 // =======================
-// ADD TRANSACTION (SUPABASE)
+// ADD TRANSACTION (SUPABASE + OFFLINE QUEUE)
 // =======================
 export const addTransaction = async (data) => {
   const payload = {
@@ -65,23 +163,36 @@ export const addTransaction = async (data) => {
     method: data.method || "Cash",
   };
 
-  const { data: resData, error } = await supabase
-    .from("transactions")
-    .insert([payload])
-    .select();
+  const currentCache = getCachedTransactions();
+  const updatedCache = [payload, ...currentCache.filter((r) => String(getRowVal(r, 0, "id")) !== String(payload.id))];
+  setCachedTransactions(updatedCache);
 
-  if (error) {
-    console.error("Supabase insert error:", error);
-    throw error;
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    addToOfflineQueue({ action: "add", payload });
+    return { status: "success", offline: true, data: [payload] };
   }
-  return { status: "success", data: resData };
+
+  try {
+    const { data: resData, error } = await supabase
+      .from("transactions")
+      .insert([payload])
+      .select();
+
+    if (error) throw error;
+    return { status: "success", data: resData };
+  } catch (err) {
+    console.warn("Insert request failed, saved to offline queue:", err);
+    addToOfflineQueue({ action: "add", payload });
+    return { status: "success", offline: true, data: [payload] };
+  }
 };
 
 // =======================
-// UPDATE TRANSACTION (SUPABASE)
+// UPDATE TRANSACTION (SUPABASE + OFFLINE QUEUE)
 // =======================
 export const updateTransaction = async (data) => {
   const payload = {
+    id: data.id,
     person: data.person,
     amount: data.amount,
     type: data.type,
@@ -90,34 +201,69 @@ export const updateTransaction = async (data) => {
     method: data.method || "Cash",
   };
 
-  const { data: resData, error } = await supabase
-    .from("transactions")
-    .update(payload)
-    .eq("id", data.id)
-    .select();
+  const currentCache = getCachedTransactions();
+  const updatedCache = currentCache.map((item) =>
+    String(getRowVal(item, 0, "id")) === String(payload.id) ? { ...item, ...payload } : item
+  );
+  setCachedTransactions(updatedCache);
 
-  if (error) {
-    console.error("Supabase update error:", error);
-    throw error;
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    addToOfflineQueue({ action: "update", payload });
+    return { status: "success", offline: true, data: [payload] };
   }
-  return { status: "success", data: resData };
+
+  try {
+    const { data: resData, error } = await supabase
+      .from("transactions")
+      .update({
+        person: payload.person,
+        amount: payload.amount,
+        type: payload.type,
+        date: payload.date,
+        notes: payload.notes,
+        method: payload.method,
+      })
+      .eq("id", payload.id)
+      .select();
+
+    if (error) throw error;
+    return { status: "success", data: resData };
+  } catch (err) {
+    console.warn("Update request failed, saved to offline queue:", err);
+    addToOfflineQueue({ action: "update", payload });
+    return { status: "success", offline: true, data: [payload] };
+  }
 };
 
 // =======================
-// DELETE TRANSACTION (SUPABASE)
+// DELETE TRANSACTION (SUPABASE + OFFLINE QUEUE)
 // =======================
 export const deleteTransaction = async (id) => {
-  const { data: resData, error } = await supabase
-    .from("transactions")
-    .delete()
-    .eq("id", id)
-    .select();
+  const currentCache = getCachedTransactions();
+  const updatedCache = currentCache.filter(
+    (item) => String(getRowVal(item, 0, "id")) !== String(id)
+  );
+  setCachedTransactions(updatedCache);
 
-  if (error) {
-    console.error("Supabase delete error:", error);
-    throw error;
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    addToOfflineQueue({ action: "delete", id });
+    return { status: "success", offline: true };
   }
-  return { status: "success", data: resData };
+
+  try {
+    const { data: resData, error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", id)
+      .select();
+
+    if (error) throw error;
+    return { status: "success", data: resData };
+  } catch (err) {
+    console.warn("Delete request failed, saved to offline queue:", err);
+    addToOfflineQueue({ action: "delete", id });
+    return { status: "success", offline: true };
+  }
 };
 
 // =======================
