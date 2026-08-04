@@ -1,22 +1,66 @@
-import { AppBar, Toolbar, Typography, Box, Chip, Container, Button, IconButton, Tooltip } from "@mui/material";
-import ashFavIcon from "../assets/AshFavICon.png";
+import { useState, useContext } from "react";
+import { AppBar, Toolbar, Typography, Box, Container, Button, IconButton, Tooltip, Menu, MenuItem, ListItemIcon } from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import PaletteIcon from "@mui/icons-material/Palette";
+import CheckIcon from "@mui/icons-material/Check";
+import { useTheme } from "@mui/material/styles";
+import logo from "../assets/logo.png";
+import { ThemeContext } from "../ThemeContext";
+import AppInfoModal from "./AppInfoModal";
 
 function Navbar({ onOpenReports }) {
+  const theme = useTheme();
+  const { activeTheme, setTheme } = useContext(ThemeContext);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+  
+  const handleThemeChange = (themeName) => {
+    setTheme(themeName);
+    handleMenuClose();
+  };
+
+  const themes = [
+    { key: "midnightEmerald", label: "Dark (Midnight)" },
+    { key: "oledNeon", label: "OLED (True Black)" },
+    { key: "cleanCorporate", label: "Light (Clean)" },
+  ];
+
   return (
     <AppBar
       position="sticky"
       elevation={0}
       sx={{
-        background: "rgba(19, 27, 46, 0.85)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(148, 163, 184, 0.12)",
+        background: theme.palette.mode === "dark" 
+          ? "rgba(18, 18, 20, 0.72)" 
+          : "rgba(255, 255, 255, 0.72)",
+        backdropFilter: "blur(25px) saturate(180%)",
+        WebkitBackdropFilter: "blur(25px) saturate(180%)",
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        transition: "background 0.3s ease",
       }}
     >
       <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 } }}>
         <Toolbar disableGutters sx={{ minHeight: { xs: 56, md: 72 }, justifyContent: "space-between" }}>
-          <Box display="flex" alignItems="center" gap={{ xs: 1, sm: 1.5 }}>
+          <Box 
+            display="flex" 
+            alignItems="center" 
+            gap={{ xs: 1, sm: 1.5 }}
+            onClick={() => setInfoOpen(true)}
+            sx={{
+              cursor: "pointer",
+              transition: "transform 0.2s, opacity 0.2s",
+              "&:hover": {
+                transform: "scale(1.02)",
+                opacity: 0.9,
+              },
+              "&:active": {
+                transform: "scale(0.98)",
+              }
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
@@ -26,14 +70,14 @@ function Navbar({ onOpenReports }) {
                 height: { xs: 34, sm: 42 },
                 borderRadius: "10px",
                 overflow: "hidden",
-                boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                boxShadow: `0 4px 12px ${theme.palette.primary.main}4D`,
                 flexShrink: 0,
               }}
             >
               <Box
                 component="img"
-                src={ashFavIcon}
-                alt="Ash-Flow Logo"
+                src={logo}
+                alt="Ash Flow Logo"
                 sx={{
                   width: "100%",
                   height: "100%",
@@ -47,17 +91,17 @@ function Navbar({ onOpenReports }) {
                 fontWeight="800"
                 sx={{
                   letterSpacing: "-0.02em",
-                  color: "#F8FAFC",
+                  color: theme.palette.text.primary,
                   lineHeight: 1.1,
                   fontSize: { xs: "1.05rem", sm: "1.25rem" },
                 }}
               >
-                ASH-FLOW
+                ASH FLOW
               </Typography>
               <Typography
                 variant="caption"
                 sx={{
-                  color: "#10B981",
+                  color: theme.palette.primary.main,
                   fontWeight: 600,
                   letterSpacing: "0.05em",
                   display: { xs: "none", sm: "block" },
@@ -68,8 +112,59 @@ function Navbar({ onOpenReports }) {
               </Typography>
             </Box>
           </Box>
-
           <Box display="flex" alignItems="center" gap={1.2}>
+            {/* Theme Switcher Button */}
+            <Tooltip title="Change Theme">
+              <IconButton
+                onClick={handleMenuOpen}
+                size="small"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: "10px",
+                  width: 36,
+                  height: 36,
+                  "&:hover": {
+                    background: theme.palette.divider,
+                  },
+                }}
+              >
+                <PaletteIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
+            
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              PaperProps={{
+                sx: {
+                  mt: 1,
+                  borderRadius: 2,
+                  boxShadow: theme.palette.custom.paperShadow,
+                  background: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.divider}`,
+                }
+              }}
+            >
+              {themes.map((t) => (
+                <MenuItem 
+                  key={t.key} 
+                  onClick={() => handleThemeChange(t.key)}
+                  sx={{ py: 1.5, px: 2 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    {activeTheme === t.key ? <CheckIcon fontSize="small" sx={{ color: theme.palette.primary.main }} /> : null}
+                  </ListItemIcon>
+                  <Typography variant="body2" fontWeight={activeTheme === t.key ? 700 : 500} color={theme.palette.text.primary}>
+                    {t.label}
+                  </Typography>
+                </MenuItem>
+              ))}
+            </Menu>
+
             {/* Desktop Reports Button */}
             <Tooltip title="View Graphical Reports & Analytics">
               <Button
@@ -78,25 +173,24 @@ function Navbar({ onOpenReports }) {
                 startIcon={<AssessmentIcon />}
                 sx={{
                   display: { xs: "none", sm: "flex" },
-                  borderColor: "rgba(16, 185, 129, 0.4)",
-                  color: "#10B981",
+                  borderColor: `${theme.palette.primary.main}66`,
+                  color: theme.palette.primary.main,
                   fontWeight: 700,
                   fontSize: "0.8rem",
                   borderRadius: "10px",
                   px: 2,
                   py: 0.5,
-                  background: "rgba(16, 185, 129, 0.08)",
+                  background: theme.palette.custom.successBoxBg,
                   "&:hover": {
-                    background: "rgba(16, 185, 129, 0.18)",
-                    borderColor: "#10B981",
-                    boxShadow: "0 0 15px rgba(16, 185, 129, 0.3)",
+                    background: theme.palette.custom.successBoxBorder,
+                    borderColor: theme.palette.primary.main,
+                    boxShadow: `0 0 15px ${theme.palette.primary.main}4D`,
                   },
                 }}
               >
                 Reports
               </Button>
             </Tooltip>
-
             {/* Mobile Reports Icon Button */}
             <Tooltip title="Reports & Analytics">
               <IconButton
@@ -104,38 +198,26 @@ function Navbar({ onOpenReports }) {
                 size="small"
                 sx={{
                   display: { xs: "flex", sm: "none" },
-                  background: "rgba(16, 185, 129, 0.15)",
-                  color: "#10B981",
-                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  background: theme.palette.custom.successBoxBg,
+                  color: theme.palette.primary.main,
+                  border: `1px solid ${theme.palette.custom.successBoxBorder}`,
                   borderRadius: "10px",
                   width: 36,
                   height: 36,
                   "&:hover": {
-                    background: "rgba(16, 185, 129, 0.25)",
-                    boxShadow: "0 0 12px rgba(16, 185, 129, 0.4)",
+                    background: theme.palette.custom.successBoxBorder,
+                    boxShadow: `0 0 12px ${theme.palette.primary.main}66`,
                   },
                 }}
               >
                 <AssessmentIcon sx={{ fontSize: 20 }} />
               </IconButton>
             </Tooltip>
-
-            {/* <Chip
-              label="ASHFAK AHAMMED O"
-              size="small"
-              sx={{
-                fontWeight: 600,
-                backgroundColor: "rgba(99, 102, 241, 0.15)",
-                color: "#818CF8",
-                border: "1px solid rgba(99, 102, 241, 0.3)",
-                px: { xs: 0.5, sm: 1 },
-                height: { xs: 24, sm: 28 },
-                fontSize: { xs: "0.7rem", sm: "0.8rem" },
-              }}
-            /> */}
           </Box>
         </Toolbar>
       </Container>
+
+      <AppInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </AppBar>
   );
 }

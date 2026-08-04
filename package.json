@@ -1,9 +1,15 @@
 {
-  "name": "money",
+  "name": "ash-flow",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "description": "Ash Flow Financial App",
+  "author": "Ashfak <ashfak@example.com>",
+  "main": "electron/main.js",
   "scripts": {
+    "electron": "electron . --no-sandbox",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
@@ -16,21 +22,44 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
+    "@supabase/supabase-js": "^2.112.0",
     "axios": "^1.13.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.2",
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.2",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "vite": "^7.3.1"
+  },
+  "build": {
+    "appId": "com.ashflow.desktop",
+    "productName": "Ash Flow",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "assets/**/*"
+    ],
+    "build": {
+      "appId": "com.ashfak.money",
+      "productName": "Ash Flow",
+      "linux": {
+        "icon": "assets/icon.png"
+      }
+    }
   }
 }

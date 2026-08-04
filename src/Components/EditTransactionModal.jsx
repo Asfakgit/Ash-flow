@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useMemo } from "react";
+import { useTheme } from "@mui/material/styles";
 import {
   Dialog,
   DialogTitle,
@@ -18,7 +19,16 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import { updateTransaction, getRowVal, getDataRows, formatDateForPicker, capitalizeName, formatDateDisplay, getTodayDisplay } from "../Services/SheetService";
+import {
+  updateTransaction,
+  getRowVal,
+  getDataRows,
+  formatDateForPicker,
+  capitalizeName,
+  formatDateDisplay,
+  getTodayDisplay,
+  isValidDate,
+} from "../Services/SheetService";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -31,7 +41,9 @@ function EditTransactionModal({
   onSuccess,
   onError,
   transactions = [],
+  setTransactions,
 }) {
+  const theme = useTheme();
   const [person, setPerson] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState("Lent");
@@ -42,17 +54,24 @@ function EditTransactionModal({
 
   const existingPersonNames = useMemo(() => {
     const rows = getDataRows(transactions);
-    const names = rows.map((row) => capitalizeName(getRowVal(row, 1, "person", ""))).filter(Boolean);
+    const names = rows
+      .map((row) => capitalizeName(getRowVal(row, 1, "person", "")))
+      .filter(Boolean);
     return Array.from(new Set(names));
   }, [transactions]);
 
   useEffect(() => {
     if (transaction && open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPerson(capitalizeName(getRowVal(transaction, 1, "person", "")));
       setAmount(getRowVal(transaction, 2, "amount", ""));
       setType(getRowVal(transaction, 3, "type", ""));
       setNotes(getRowVal(transaction, 5, "notes", ""));
-      setMethod(getRowVal(transaction, 6, "method") || getRowVal(transaction, 6, "paymentMethod") || "Cash");
+      setMethod(
+        getRowVal(transaction, 6, "method") ||
+          getRowVal(transaction, 6, "paymentMethod") ||
+          "Cash",
+      );
       const rawDate = getRowVal(transaction, 4, "date", "");
       setDate(formatDateDisplay(rawDate));
     }
@@ -64,28 +83,68 @@ function EditTransactionModal({
       return;
     }
 
-    try {
-      setLoading(true);
-      const payload = {
-        id: getRowVal(transaction, 0, "id", Date.now()),
-        person: capitalizeName(person),
-        amount: parseFloat(amount),
-        type,
-        notes: notes || "",
-        date: formatDateDisplay(date || getRowVal(transaction, 4, "date", getTodayDisplay())),
-        method: method || "Cash",
-      };
-
-      await updateTransaction(payload);
-
-      setLoading(false);
-      onClose();
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      console.error("Update failed:", err);
-      setLoading(false);
-      if (onError) onError("Failed to update transaction. Please try again.");
+    if (!date || !isValidDate(date)) {
+      if (onError) onError("Please enter a valid date in DD/MM/YYYY format.");
+      return;
     }
+
+    if (
+      String(amount).includes("-") ||
+      parseFloat(amount) <= 0 ||
+      isNaN(parseFloat(amount))
+    ) {
+      if (onError)
+        onError(
+          "Amount must be a positive number greater than 0 (cannot be negative or zero).",
+        );
+      return;
+    }
+
+    setLoading(true);
+
+    const payload = {
+      id: getRowVal(transaction, 0, "id", Date.now()),
+      person: capitalizeName(person),
+      amount: parseFloat(amount),
+      type,
+      notes: notes || "",
+      date: formatDateDisplay(
+        date || getRowVal(transaction, 4, "date", getTodayDisplay()),
+      ),
+      method: method || "Cash",
+    };
+
+    // Optimistic Update
+    if (setTransactions) {
+      setTransactions((prev) =>
+        prev.map((row) => {
+          if (String(getRowVal(row, 0, "id", null)) === String(payload.id)) {
+            return {
+              id: payload.id,
+              person: payload.person,
+              amount: payload.amount,
+              type: payload.type,
+              date: payload.date,
+              notes: payload.notes,
+              method: payload.method,
+            };
+          }
+          return row;
+        })
+      );
+    }
+
+    // Instantly close modal and show success
+    setLoading(false);
+    onClose();
+    if (onSuccess) onSuccess();
+
+    // Fire API in background
+    updateTransaction(payload).catch((err) => {
+      console.error("Update failed:", err);
+      // In a real production app, you might want to rollback the optimistic update here
+      if (onError) onError("Failed to update transaction on the server.");
+    });
   };
 
   return (
@@ -99,7 +158,7 @@ function EditTransactionModal({
       PaperProps={{
         sx: {
           borderRadius: { xs: 3, sm: 4 },
-          background: "linear-gradient(145deg, #172036 0%, #0F172A 100%)",
+          background: theme.palette.custom.dialogGradient,
           border: "1px solid rgba(148, 163, 184, 0.15)",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.85)",
           overflow: "hidden",
@@ -128,16 +187,23 @@ function EditTransactionModal({
               height: { xs: 36, sm: 44 },
               borderRadius: "12px",
               background: "rgba(99, 102, 241, 0.15)",
-              color: "#818CF8",
+              color: theme.palette.secondary.main,
             }}
           >
             <EditNoteIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight="bold" sx={{ color: "#F8FAFC", fontSize: { xs: "1.05rem", sm: "1.25rem" } }}>
+            <Typography
+              variant="h6"
+              fontWeight="bold"
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: { xs: "1.05rem", sm: "1.25rem" },
+              }}
+            >
               Edit Transaction
             </Typography>
-            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
               ID: {getRowVal(transaction, 0, "id", "N/A")}
             </Typography>
           </Box>
@@ -146,21 +212,28 @@ function EditTransactionModal({
           onClick={onClose}
           disabled={loading}
           sx={{
-            color: "#94A3B8",
-            "&:hover": { color: "#F8FAFC", backgroundColor: "rgba(148, 163, 184, 0.1)" },
+            color: theme.palette.text.secondary,
+            "&:hover": {
+              color: theme.palette.text.primary,
+              backgroundColor: "rgba(148, 163, 184, 0.1)",
+            },
           }}
         >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 3 }, pb: 1, mt: 1 }}>
+      <DialogContent
+        sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 3 }, pb: 1, mt: 1 }}
+      >
         <Box display="flex" flexDirection="column" gap={{ xs: 2, sm: 2.5 }}>
           <Autocomplete
             freeSolo
             options={existingPersonNames}
             value={person}
-            onInputChange={(event, newInputValue) => setPerson(newInputValue || "")}
+            onInputChange={(event, newInputValue) =>
+              setPerson(newInputValue || "")
+            }
             onBlur={() => setPerson((prev) => capitalizeName(prev))}
             disabled={loading}
             renderInput={(params) => (
@@ -175,14 +248,33 @@ function EditTransactionModal({
             )}
           />
 
-          <Box display="flex" gap={2} sx={{ flexDirection: { xs: "column", sm: "row" } }}>
+          <Box
+            display="flex"
+            gap={2}
+            sx={{ flexDirection: { xs: "column", sm: "row" } }}
+          >
             <TextField
               label="Amount (₹)"
               type="number"
               fullWidth
               size="small"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val.includes("-") || parseFloat(val) < 0) return;
+                setAmount(val);
+              }}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "-" ||
+                  e.key === "e" ||
+                  e.key === "E" ||
+                  e.key === "+"
+                ) {
+                  e.preventDefault();
+                }
+              }}
+              inputProps={{ min: "0", step: "any" }}
               disabled={loading}
               placeholder="0.00"
               variant="outlined"
@@ -200,7 +292,10 @@ function EditTransactionModal({
             >
               <MenuItem value="Lent">Lent (I gave)</MenuItem>
               <MenuItem value="Borrowed">Borrowed (I received)</MenuItem>
-              <MenuItem value="Settled" sx={{ color: "#F43F5E", fontWeight: 700 }}>
+              <MenuItem
+                value="Settled"
+                sx={{ color: theme.palette.error.main, fontWeight: 700 }}
+              >
                 Settled / Close Account
               </MenuItem>
             </TextField>
@@ -229,16 +324,20 @@ function EditTransactionModal({
               disabled={loading}
               variant="outlined"
               placeholder="DD/MM/YYYY"
+              error={Boolean(date && !isValidDate(date))}
+              helperText={date && !isValidDate(date) ? "Invalid date" : ""}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end" sx={{ position: "relative" }}>
-                    <IconButton size="small" sx={{ color: "#38BDF8" }}>
+                    <IconButton size="small" sx={{ color: theme.palette.text.secondary }}>
                       <CalendarMonthIcon />
                     </IconButton>
                     <input
                       type="date"
                       value={formatDateForPicker(date)}
-                      onChange={(e) => setDate(formatDateDisplay(e.target.value))}
+                      onChange={(e) =>
+                        setDate(formatDateDisplay(e.target.value))
+                      }
                       style={{
                         position: "absolute",
                         top: 0,
@@ -290,11 +389,11 @@ function EditTransactionModal({
             px: 3,
             py: { xs: 1.2, sm: 1 },
             borderColor: "rgba(148, 163, 184, 0.2)",
-            color: "#94A3B8",
+            color: theme.palette.text.secondary,
             "&:hover": {
               borderColor: "rgba(148, 163, 184, 0.4)",
               backgroundColor: "rgba(148, 163, 184, 0.05)",
-              color: "#F8FAFC",
+              color: theme.palette.text.primary,
             },
           }}
         >
@@ -310,13 +409,17 @@ function EditTransactionModal({
             px: 4,
             py: { xs: 1.2, sm: 1 },
             minWidth: 140,
-            background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)",
+            background: theme.palette.custom.secondaryGradient,
             "&:hover": {
-              background: "linear-gradient(135deg, #818CF8 0%, #6366F1 100%)",
+              background: theme.palette.custom.secondaryHoverGradient,
             },
           }}
         >
-          {loading ? <CircularProgress size={24} color="inherit" /> : "Save Changes"}
+          {loading ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            "Save Changes"
+          )}
         </Button>
       </DialogActions>
     </Dialog>

@@ -27,6 +27,7 @@ function useTransactions(refresh) {
 
   return {
     transactions,
+    setTransactions,
     loading,
     error,
   };

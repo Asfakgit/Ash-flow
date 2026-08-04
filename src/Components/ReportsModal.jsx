@@ -1,4 +1,5 @@
 import { useState, useMemo, forwardRef } from "react";
+import { useTheme } from "@mui/material/styles";
 import {
   Dialog,
   DialogTitle,
@@ -7,20 +8,17 @@ import {
   Typography,
   IconButton,
   Slide,
-  ToggleButtonGroup,
-  ToggleButton,
   Grid,
   Paper,
   Tooltip,
-  Divider,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AssessmentIcon from "@mui/icons-material/Assessment";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import BalanceIcon from "@mui/icons-material/Balance";
-import PaymentsIcon from "@mui/icons-material/Payments";
-import { getDataRows, getRowVal, formatDateForPicker } from "../Services/SheetService";
+import ArrowCircleUpIcon from "@mui/icons-material/ArrowCircleUp";
+import ArrowCircleDownIcon from "@mui/icons-material/ArrowCircleDown";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import { getDataRows, getRowVal } from "../Services/SheetService";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -29,29 +27,19 @@ const Transition = forwardRef(function Transition(props, ref) {
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function ReportsModal({ open, onClose, transactions = [] }) {
-  const [timeframe, setTimeframe] = useState("monthly");
+  const theme = useTheme();
   const [hoveredData, setHoveredData] = useState(null);
 
-  const handleTimeframeChange = (event, newAlignment) => {
-    if (newAlignment !== null) {
-      setTimeframe(newAlignment);
-      setHoveredData(null);
-    }
-  };
-
-  // Aggregate Data for Chart
+  // Aggregate Data
   const { chartData, maxVal, summary, methodStats } = useMemo(() => {
     const rows = getDataRows(transactions);
     const now = new Date();
 
-    let data = [];
     let totalLent = 0;
     let totalBorrowed = 0;
-    let peakLent = { label: "-", val: 0 };
-    let peakBorrowed = { label: "-", val: 0 };
     let methods = { Cash: 0, GPay: 0, Bank: 0 };
 
-    // Process all rows for method breakdown and totals
+    // Process all rows for all-time totals and methods
     rows.forEach((row) => {
       const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
       const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
@@ -65,90 +53,60 @@ function ReportsModal({ open, onClose, transactions = [] }) {
       else methods.Cash += amount;
     });
 
-    if (timeframe === "monthly") {
-      // Create map for last 6 months including current
-      const monthMap = {};
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        const label = `${MONTH_NAMES[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
-        monthMap[key] = { key, label, lent: 0, borrowed: 0 };
-      }
-
-      rows.forEach((row) => {
-        const dateStr = formatDateForPicker(getRowVal(row, 4, "date", ""));
-        const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
-        const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
-
-        if (dateStr && dateStr.length >= 7) {
-          const key = dateStr.substring(0, 7);
-          if (monthMap[key]) {
-            if (type === "lent") monthMap[key].lent += amount;
-            if (type === "borrowed") monthMap[key].borrowed += amount;
-          } else {
-            // If older or future month not in default 6, add it
-            const [y, m] = key.split("-");
-            const mIdx = parseInt(m, 10) - 1;
-            if (!isNaN(mIdx) && mIdx >= 0 && mIdx < 12) {
-              const label = `${MONTH_NAMES[mIdx]} '${y.slice(2)}`;
-              monthMap[key] = { key, label, lent: type === "lent" ? amount : 0, borrowed: type === "borrowed" ? amount : 0 };
-            }
-          }
-        }
-      });
-
-      data = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
-    } else {
-      // Weekly View: Last 6 Weeks
-      const weekBuckets = [
-        { label: "5 Wks Ago", lent: 0, borrowed: 0, minDay: 35, maxDay: 41 },
-        { label: "4 Wks Ago", lent: 0, borrowed: 0, minDay: 28, maxDay: 34 },
-        { label: "3 Wks Ago", lent: 0, borrowed: 0, minDay: 21, maxDay: 27 },
-        { label: "2 Wks Ago", lent: 0, borrowed: 0, minDay: 14, maxDay: 20 },
-        { label: "Last Week", lent: 0, borrowed: 0, minDay: 7, maxDay: 13 },
-        { label: "This Week", lent: 0, borrowed: 0, minDay: 0, maxDay: 6 },
-      ];
-
-      rows.forEach((row) => {
-        const dateStr = formatDateForPicker(getRowVal(row, 4, "date", ""));
-        const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
-        const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
-
-        if (dateStr) {
-          const txDate = new Date(dateStr);
-          if (!isNaN(txDate.getTime())) {
-            const diffDays = Math.floor((now - txDate) / (1000 * 60 * 60 * 24));
-            weekBuckets.forEach((bucket) => {
-              if (diffDays >= bucket.minDay && diffDays <= bucket.maxDay) {
-                if (type === "lent") bucket.lent += amount;
-                if (type === "borrowed") bucket.borrowed += amount;
-              }
-            });
-          }
-        }
-      });
-
-      data = weekBuckets;
+    // Create map for last 6 months for the chart
+    const monthMap = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = `${MONTH_NAMES[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+      monthMap[key] = { key, label, lent: 0, borrowed: 0 };
     }
 
-    // Find peak values and max bar height
+    rows.forEach((row) => {
+      let rawDate = getRowVal(row, 4, "date", "");
+      if (!rawDate) return;
+
+      let parsedDate = null;
+      if (rawDate instanceof Date) {
+        parsedDate = rawDate;
+      } else if (typeof rawDate === "string") {
+        const dmyMatch = rawDate.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+        if (dmyMatch) {
+          parsedDate = new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+        } else {
+          parsedDate = new Date(rawDate);
+        }
+      }
+
+      if (parsedDate && !isNaN(parsedDate.getTime())) {
+        const rowYear = parsedDate.getFullYear();
+        const rowMonth = String(parsedDate.getMonth() + 1).padStart(2, "0");
+        const key = `${rowYear}-${rowMonth}`;
+
+        if (monthMap[key]) {
+          const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
+          const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
+
+          if (type === "lent") monthMap[key].lent += amount;
+          if (type === "borrowed") monthMap[key].borrowed += amount;
+        }
+      }
+    });
+
+    const data = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
     let max = 5000;
     data.forEach((d) => {
       if (d.lent > max) max = d.lent;
       if (d.borrowed > max) max = d.borrowed;
-      if (d.lent > peakLent.val) peakLent = { label: d.label, val: d.lent };
-      if (d.borrowed > peakBorrowed.val) peakBorrowed = { label: d.label, val: d.borrowed };
     });
 
     return {
       chartData: data,
       maxVal: max,
-      summary: { totalLent, totalBorrowed, peakLent, peakBorrowed },
+      summary: { totalLent, totalBorrowed },
       methodStats: methods,
     };
-  }, [transactions, timeframe]);
-
-  const activeData = hoveredData || chartData[chartData.length - 1] || { label: "-", lent: 0, borrowed: 0 };
+  }, [transactions]);
 
   return (
     <Dialog
@@ -160,13 +118,13 @@ function ReportsModal({ open, onClose, transactions = [] }) {
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: { xs: 3, sm: 4 },
-          background: "linear-gradient(145deg, #131B2E 0%, #0F172A 100%)",
+          borderRadius: { xs: 2.5, sm: 4 },
+          background: theme.palette.custom.cardGradient,
           border: "1px solid rgba(148, 163, 184, 0.15)",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.85)",
           overflow: "hidden",
-          m: { xs: 1.5, sm: 2 },
-          maxHeight: "90vh",
+          m: { xs: 1, sm: 2 },
+          maxHeight: "92vh",
         },
       }}
     >
@@ -176,9 +134,9 @@ function ReportsModal({ open, onClose, transactions = [] }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          px: { xs: 2, sm: 3.5 },
-          pt: { xs: 2.5, sm: 3 },
-          pb: 2,
+          px: { xs: 2, sm: 3 },
+          pt: 2,
+          pb: 1.5,
           borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
           flexWrap: "wrap",
           gap: 1.5,
@@ -193,148 +151,160 @@ function ReportsModal({ open, onClose, transactions = [] }) {
               width: { xs: 38, sm: 46 },
               height: { xs: 38, sm: 46 },
               borderRadius: "14px",
-              background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
-              color: "#ffffff",
+              background: theme.palette.custom.primaryGradient,
+              color: theme.palette.text.primary,
               boxShadow: "0 4px 15px rgba(16, 185, 129, 0.4)",
             }}
           >
             <AssessmentIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight="800" sx={{ color: "#F8FAFC", fontSize: { xs: "1.1rem", sm: "1.35rem" } }}>
+            <Typography variant="h6" fontWeight="800" sx={{ color: theme.palette.text.primary, fontSize: { xs: "1.1rem", sm: "1.35rem" } }}>
               Reports & Analytics
             </Typography>
-            <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.75rem" }}>
-              Interactive cash flow and trend visualization
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: "0.75rem" }}>
+              All-time cash flow and monthly visualization
             </Typography>
           </Box>
         </Box>
 
-        <Box display="flex" alignItems="center" gap={1.5}>
-          <ToggleButtonGroup
-            size="small"
-            value={timeframe}
-            exclusive
-            onChange={handleTimeframeChange}
-            sx={{
-              backgroundColor: "rgba(15, 23, 42, 0.8)",
-              borderRadius: "10px",
-              p: 0.5,
-              border: "1px solid rgba(148, 163, 184, 0.15)",
-              "& .MuiToggleButton-root": {
-                color: "#94A3B8",
-                fontWeight: 700,
-                fontSize: { xs: "0.7rem", sm: "0.8rem" },
-                px: { xs: 1.5, sm: 2 },
-                py: 0.6,
-                borderRadius: "8px !important",
-                border: "none",
-                textTransform: "none",
-                transition: "all 0.2s",
-                "&.Mui-selected": {
-                  color: "#ffffff",
-                  background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)",
-                  boxShadow: "0 2px 10px rgba(99, 102, 241, 0.4)",
-                },
-                "&:hover:not(.Mui-selected)": {
-                  color: "#F8FAFC",
-                  backgroundColor: "rgba(148, 163, 184, 0.1)",
-                },
-              },
-            }}
-          >
-            <ToggleButton value="monthly">Monthly</ToggleButton>
-            <ToggleButton value="weekly">Weekly</ToggleButton>
-          </ToggleButtonGroup>
-
-          <IconButton
-            onClick={onClose}
-            sx={{
-              color: "#94A3B8",
-              "&:hover": { color: "#F8FAFC", backgroundColor: "rgba(148, 163, 184, 0.1)" },
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
+        <IconButton
+          onClick={onClose}
+          sx={{
+            color: theme.palette.text.secondary,
+            "&:hover": { color: theme.palette.text.primary, backgroundColor: theme.palette.divider },
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ px: { xs: 2, sm: 3.5 }, py: { xs: 2.5, sm: 3 }, overflowY: "auto" }}>
-        {/* Active Hover / Current Summary Banner */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: { xs: 1.5, sm: 2 },
-            mb: 3,
-            borderRadius: 3,
-            backgroundColor: "rgba(15, 23, 42, 0.6)",
-            border: "1px solid rgba(148, 163, 184, 0.12)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 2,
-          }}
-        >
-          <Box>
-            <Typography variant="caption" fontWeight="700" sx={{ color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {hoveredData ? `Inspecting Period: ${activeData.label}` : `Latest Period: ${activeData.label}`}
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#94A3B8", fontSize: "0.75rem" }}>
-              Hover or tap any bar column below for detailed period breakdown
-            </Typography>
-          </Box>
-          <Box display="flex" gap={{ xs: 2, sm: 4 }}>
-            <Box>
-              <Typography variant="caption" sx={{ color: "#94A3B8", display: "block" }}>Lent</Typography>
-              <Typography variant="subtitle1" fontWeight="800" sx={{ color: "#34D399" }}>
-                ₹{activeData.lent.toLocaleString("en-IN")}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ color: "#94A3B8", display: "block" }}>Borrowed</Typography>
-              <Typography variant="subtitle1" fontWeight="800" sx={{ color: "#818CF8" }}>
-                ₹{activeData.borrowed.toLocaleString("en-IN")}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ color: "#94A3B8", display: "block" }}>Net Flow</Typography>
-              <Typography
-                variant="subtitle1"
-                fontWeight="800"
-                sx={{ color: activeData.lent - activeData.borrowed >= 0 ? "#10B981" : "#F43F5E" }}
-              >
-                ₹{(activeData.lent - activeData.borrowed).toLocaleString("en-IN")}
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
+      <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 1.5 }, overflowY: "hidden" }}>
+        
+        {/* ALL-TIME SUMMARY CARDS */}
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+          <Typography variant="subtitle2" fontWeight="700" sx={{ color: theme.palette.text.primary, display: "flex", alignItems: "center", gap: 1 }}>
+            <AccountBalanceWalletIcon sx={{ color: theme.palette.primary.main, fontSize: 18 }} />
+            Analytical Insights & Breakdown
+          </Typography>
+        </Box>
 
-        {/* Custom Animated SVG/CSS Dual Bar Chart */}
+        <Grid container spacing={1} mb={1.5}>
+          <Grid item xs={12} sm={4}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.5,
+                borderRadius: 1.5,
+                backgroundColor: theme.palette.custom.successBoxBg,
+                border: "1px solid rgba(16, 185, 129, 0.2)",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                <ArrowCircleUpIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
+                <Typography variant="caption" fontWeight="800" sx={{ color: theme.palette.primary.main, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Total Lent
+                </Typography>
+              </Box>
+              <Typography variant="h5" fontWeight="800" sx={{ color: theme.palette.primary.main, mb: 0 }}>
+                ₹{summary.totalLent.toLocaleString("en-IN")}
+              </Typography>
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: "none" }}></Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} sm={4}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.5,
+                borderRadius: 1.5,
+                backgroundColor: theme.palette.custom.secondaryBoxBg,
+                border: "1px solid rgba(99, 102, 241, 0.2)",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                <ArrowCircleDownIcon sx={{ color: theme.palette.secondary.main, fontSize: 20 }} />
+                <Typography variant="caption" fontWeight="800" sx={{ color: theme.palette.secondary.main, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Total Borrowed
+                </Typography>
+              </Box>
+              <Typography variant="h5" fontWeight="800" sx={{ color: theme.palette.secondary.main, mb: 0 }}>
+                ₹{summary.totalBorrowed.toLocaleString("en-IN")}
+              </Typography>
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: "none" }}></Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} sm={4}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.5,
+                borderRadius: 1.5,
+                backgroundColor: summary.totalLent - summary.totalBorrowed >= 0 ? theme.palette.custom.netPositiveBoxBg : theme.palette.custom.errorBoxBg,
+                border: summary.totalLent - summary.totalBorrowed >= 0 ? "1px solid rgba(168, 85, 247, 0.2)" : "1px solid rgba(244, 63, 94, 0.2)",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                <BalanceIcon sx={{ color: summary.totalLent - summary.totalBorrowed >= 0 ? theme.palette.custom.netPositiveColor : theme.palette.error.main, fontSize: 20 }} />
+                <Typography variant="caption" fontWeight="800" sx={{ color: summary.totalLent - summary.totalBorrowed >= 0 ? theme.palette.custom.netPositiveColor : theme.palette.error.main, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Net Difference
+                </Typography>
+              </Box>
+              <Typography
+                variant="h5"
+                fontWeight="800"
+                sx={{ color: summary.totalLent - summary.totalBorrowed >= 0 ? theme.palette.custom.netPositiveColor : theme.palette.error.main, mb: 0 }}
+              >
+                ₹{(summary.totalLent - summary.totalBorrowed).toLocaleString("en-IN")}
+              </Typography>
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: "none" }}></Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* MONTHLY BAR CHART */}
         <Box
           sx={{
-            p: { xs: 2, sm: 3 },
-            borderRadius: 3,
-            backgroundColor: "rgba(19, 27, 46, 0.5)",
+            p: 1,
+            borderRadius: 1.5,
+            backgroundColor: theme.palette.custom.chartBg,
             border: "1px solid rgba(148, 163, 184, 0.1)",
-            mb: 3.5,
+            mb: 1.5,
           }}
         >
-          <Typography variant="subtitle2" fontWeight="700" sx={{ color: "#F8FAFC", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-            <AssessmentIcon sx={{ color: "#10B981", fontSize: 18 }} />
-            {timeframe === "monthly" ? "Monthly Lending vs Borrowing Flow" : "Weekly Activity Trend"}
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <Typography variant="subtitle2" fontWeight="700" sx={{ color: theme.palette.text.primary, display: "flex", alignItems: "center", gap: 1 }}>
+              <AssessmentIcon sx={{ color: theme.palette.primary.main, fontSize: 18 }} />
+              Monthly Activity Trend (Last 6 Months)
+            </Typography>
+            {hoveredData && (
+              <Typography variant="caption" sx={{ color: theme.palette.secondary.main, fontWeight: 700 }}>
+                {hoveredData.label}: Lent ₹{hoveredData.lent.toLocaleString("en-IN")} | Borrowed ₹{hoveredData.borrowed.toLocaleString("en-IN")}
+              </Typography>
+            )}
+          </Box>
 
           {/* Chart Area */}
           <Box
             sx={{
-              height: { xs: 220, sm: 260 },
+              height: { xs: 120, sm: 130 },
               display: "flex",
               alignItems: "flex-end",
               justifyContent: "space-between",
               gap: { xs: 1, sm: 2 },
-              pt: 4,
-              pb: 1,
+              pt: 2.5,
+              pb: 0.5,
               px: { xs: 1, sm: 2 },
               position: "relative",
               borderBottom: "2px solid rgba(148, 163, 184, 0.2)",
@@ -354,13 +324,13 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                   key={i}
                   title={
                     <Box sx={{ p: 0.5 }}>
-                      <Typography variant="caption" fontWeight="bold" sx={{ color: "#ffffff", display: "block", mb: 0.5 }}>
+                      <Typography variant="caption" fontWeight="bold" sx={{ color: theme.palette.text.primary, display: "block", mb: 0.5 }}>
                         {d.label}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#34D399", display: "block" }}>
+                      <Typography variant="caption" sx={{ color: theme.palette.primary.main, display: "block" }}>
                         Lent: ₹{d.lent.toLocaleString("en-IN")}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#818CF8", display: "block" }}>
+                      <Typography variant="caption" sx={{ color: theme.palette.secondary.main, display: "block" }}>
                         Borrowed: ₹{d.borrowed.toLocaleString("en-IN")}
                       </Typography>
                     </Box>
@@ -383,7 +353,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                       px: { xs: 0.5, sm: 1 },
                       borderRadius: "8px",
                       transition: "background-color 0.2s",
-                      backgroundColor: isSelected ? "rgba(148, 163, 184, 0.08)" : "transparent",
+                      backgroundColor: isSelected ? theme.palette.custom.chartGrid : "transparent",
                     }}
                   >
                     {/* Bar Group */}
@@ -393,7 +363,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                         sx={{
                           width: { xs: 12, sm: 22 },
                           height: `${lentHeight}%`,
-                          background: "linear-gradient(180deg, #34D399 0%, #10B981 100%)",
+                          background: theme.palette.custom.primaryGradient,
                           borderRadius: "4px 4px 0 0",
                           boxShadow: d.lent > 0 ? "0 0 10px rgba(16, 185, 129, 0.4)" : "none",
                           transition: "height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
@@ -404,7 +374,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                         sx={{
                           width: { xs: 12, sm: 22 },
                           height: `${borrowedHeight}%`,
-                          background: "linear-gradient(180deg, #818CF8 0%, #6366F1 100%)",
+                          background: theme.palette.custom.secondaryGradient,
                           borderRadius: "4px 4px 0 0",
                           boxShadow: d.borrowed > 0 ? "0 0 10px rgba(99, 102, 241, 0.4)" : "none",
                           transition: "height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
@@ -424,7 +394,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 key={i}
                 variant="caption"
                 sx={{
-                  color: hoveredData && hoveredData.label === d.label ? "#F8FAFC" : "#94A3B8",
+                  color: hoveredData && hoveredData.label === d.label ? theme.palette.text.primary : theme.palette.text.secondary,
                   fontWeight: hoveredData && hoveredData.label === d.label ? 700 : 500,
                   fontSize: { xs: "0.65rem", sm: "0.75rem" },
                   textAlign: "center",
@@ -439,129 +409,39 @@ function ReportsModal({ open, onClose, transactions = [] }) {
           </Box>
 
           {/* Legend */}
-          <Box display="flex" justifyContent="center" gap={3} mt={2.5} pt={1.5} sx={{ borderTop: "1px dashed rgba(148, 163, 184, 0.1)" }}>
+          <Box display="flex" justifyContent="center" gap={3} mt={1.5} pt={1} sx={{ borderTop: "1px dashed rgba(148, 163, 184, 0.1)" }}>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 12, height: 12, borderRadius: "3px", backgroundColor: "#34D399" }} />
-              <Typography variant="caption" fontWeight="600" sx={{ color: "#CBD5E1" }}>Total Lent</Typography>
+              <Box sx={{ width: 12, height: 12, borderRadius: "3px", backgroundColor: theme.palette.primary.main }} />
+              <Typography variant="caption" fontWeight="600" sx={{ color: theme.palette.text.secondary }}>Monthly Lent</Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 12, height: 12, borderRadius: "3px", backgroundColor: "#818CF8" }} />
-              <Typography variant="caption" fontWeight="600" sx={{ color: "#CBD5E1" }}>Total Borrowed</Typography>
+              <Box sx={{ width: 12, height: 12, borderRadius: "3px", backgroundColor: theme.palette.secondary.main }} />
+              <Typography variant="caption" fontWeight="600" sx={{ color: theme.palette.text.secondary }}>Monthly Borrowed</Typography>
             </Box>
           </Box>
         </Box>
-
-        {/* Summary Insights Grid */}
-        <Typography variant="subtitle2" fontWeight="700" sx={{ color: "#F8FAFC", mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
-          <BalanceIcon sx={{ color: "#818CF8", fontSize: 18 }} />
-          Analytical Insights & Breakdown
-        </Typography>
-
-        <Grid container spacing={2} mb={3}>
-          <Grid item xs={12} sm={4}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                backgroundColor: "rgba(16, 185, 129, 0.08)",
-                border: "1px solid rgba(16, 185, 129, 0.2)",
-                height: "100%",
-              }}
-            >
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <TrendingUpIcon sx={{ color: "#10B981", fontSize: 20 }} />
-                <Typography variant="caption" fontWeight="700" sx={{ color: "#10B981", textTransform: "uppercase" }}>
-                  Peak Lending Period
-                </Typography>
-              </Box>
-              <Typography variant="h5" fontWeight="800" sx={{ color: "#F8FAFC" }}>
-                ₹{summary.peakLent.val.toLocaleString("en-IN")}
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                Recorded in {summary.peakLent.label}
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                backgroundColor: "rgba(99, 102, 241, 0.08)",
-                border: "1px solid rgba(99, 102, 241, 0.2)",
-                height: "100%",
-              }}
-            >
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <TrendingDownIcon sx={{ color: "#818CF8", fontSize: 20 }} />
-                <Typography variant="caption" fontWeight="700" sx={{ color: "#818CF8", textTransform: "uppercase" }}>
-                  Peak Borrowing Period
-                </Typography>
-              </Box>
-              <Typography variant="h5" fontWeight="800" sx={{ color: "#F8FAFC" }}>
-                ₹{summary.peakBorrowed.val.toLocaleString("en-IN")}
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                Recorded in {summary.peakBorrowed.label}
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 3,
-                backgroundColor: "rgba(168, 85, 247, 0.08)",
-                border: "1px solid rgba(168, 85, 247, 0.2)",
-                height: "100%",
-              }}
-            >
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <PaymentsIcon sx={{ color: "#C084FC", fontSize: 20 }} />
-                <Typography variant="caption" fontWeight="700" sx={{ color: "#C084FC", textTransform: "uppercase" }}>
-                  Overall Net Flow
-                </Typography>
-              </Box>
-              <Typography
-                variant="h5"
-                fontWeight="800"
-                sx={{ color: summary.totalLent - summary.totalBorrowed >= 0 ? "#34D399" : "#FB7185" }}
-              >
-                ₹{Math.abs(summary.totalLent - summary.totalBorrowed).toLocaleString("en-IN")}
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                {summary.totalLent - summary.totalBorrowed >= 0 ? "Net surplus overall" : "Net deficit overall"}
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
 
         {/* Payment Methods Breakdown Bar */}
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 3,
-            backgroundColor: "rgba(19, 27, 46, 0.4)",
+            p: 1.2,
+            borderRadius: 1.5,
+            backgroundColor: theme.palette.background.paper,
             border: "1px solid rgba(148, 163, 184, 0.12)",
           }}
         >
-          <Typography variant="caption" fontWeight="700" sx={{ color: "#94A3B8", textTransform: "uppercase", display: "block", mb: 1.5 }}>
-            Payment Method Volume Distribution
+          <Typography variant="caption" fontWeight="700" sx={{ color: theme.palette.text.secondary, textTransform: "uppercase", display: "block", mb: 1 }}>
+            Payment Method Volume (All-Time)
           </Typography>
 
           {/* Progress Bar Distribution */}
-          <Box display="flex" sx={{ height: 12, borderRadius: "6px", overflow: "hidden", backgroundColor: "rgba(15, 23, 42, 0.8)", mb: 1.5 }}>
+          <Box display="flex" sx={{ height: 8, borderRadius: "4px", overflow: "hidden", backgroundColor: "rgba(15, 23, 42, 0.8)", mb: 1 }}>
             {methodStats.Cash > 0 && (
               <Box
                 sx={{
                   width: `${(methodStats.Cash / Math.max(summary.totalLent + summary.totalBorrowed, 1)) * 100}%`,
-                  backgroundColor: "#34D399",
+                  backgroundColor: theme.palette.primary.main,
                 }}
               />
             )}
@@ -569,7 +449,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
               <Box
                 sx={{
                   width: `${(methodStats.GPay / Math.max(summary.totalLent + summary.totalBorrowed, 1)) * 100}%`,
-                  backgroundColor: "#60A5FA",
+                  backgroundColor: theme.palette.secondary.main,
                 }}
               />
             )}
@@ -577,7 +457,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
               <Box
                 sx={{
                   width: `${(methodStats.Bank / Math.max(summary.totalLent + summary.totalBorrowed, 1)) * 100}%`,
-                  backgroundColor: "#C084FC",
+                  backgroundColor: theme.palette.custom.netPositiveColor,
                 }}
               />
             )}
@@ -585,20 +465,20 @@ function ReportsModal({ open, onClose, transactions = [] }) {
 
           <Box display="flex" justifyContent="space-between" flexWrap="wrap" gap={2}>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 10, height: 10, borderRadius: "2px", backgroundColor: "#34D399" }} />
-              <Typography variant="caption" sx={{ color: "#CBD5E1" }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: "2px", backgroundColor: theme.palette.primary.main }} />
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                  Cash: <strong>₹{methodStats.Cash.toLocaleString("en-IN")}</strong>
               </Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 10, height: 10, borderRadius: "2px", backgroundColor: "#60A5FA" }} />
-              <Typography variant="caption" sx={{ color: "#CBD5E1" }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: "2px", backgroundColor: theme.palette.secondary.main }} />
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                  GPay: <strong>₹{methodStats.GPay.toLocaleString("en-IN")}</strong>
               </Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 10, height: 10, borderRadius: "2px", backgroundColor: "#C084FC" }} />
-              <Typography variant="caption" sx={{ color: "#CBD5E1" }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: "2px", backgroundColor: theme.palette.custom.netPositiveColor }} />
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                  Bank: <strong>₹{methodStats.Bank.toLocaleString("en-IN")}</strong>
               </Typography>
             </Box>

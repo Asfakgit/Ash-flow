@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Ash-Flow</string>
-    <string name="title_activity_main">Ash-Flow</string>
+    <string name="app_name">Ash Flow</string>
+    <string name="title_activity_main">Ash Flow</string>
     <string name="package_name">com.ashflow.money</string>
     <string name="custom_url_scheme">com.ashflow.money</string>
 </resources>

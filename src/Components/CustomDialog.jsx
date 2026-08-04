@@ -1,3 +1,4 @@
+import { useTheme } from "@mui/material/styles";
 import {
   Dialog,
   DialogContent,
@@ -6,8 +7,9 @@ import {
   Button,
   Box,
   Slide,
+  CircularProgress,
 } from "@mui/material";
-import { forwardRef } from "react";
+import { forwardRef, useState, useEffect } from "react";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
@@ -27,16 +29,25 @@ function CustomDialog({
   confirmText = "Confirm",
   cancelText = "Cancel",
 }) {
+  const theme = useTheme();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setIsSubmitting(false);
+    }
+  }, [open]);
+
   const getIcon = () => {
     switch (type) {
       case "success":
-        return <CheckCircleOutlineIcon sx={{ fontSize: 72, color: "#10B981", mb: 1.5, filter: "drop-shadow(0 0 12px rgba(16,185,129,0.4))" }} />;
+        return <CheckCircleOutlineIcon sx={{ fontSize: 72, color: theme.palette.success.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(16,185,129,0.4))" }} />;
       case "confirm":
-        return <WarningAmberIcon sx={{ fontSize: 72, color: "#F59E0B", mb: 1.5, filter: "drop-shadow(0 0 12px rgba(245,158,11,0.4))" }} />;
+        return <WarningAmberIcon sx={{ fontSize: 72, color: theme.palette.warning.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(245,158,11,0.4))" }} />;
       case "error":
-        return <ErrorOutlineIcon sx={{ fontSize: 72, color: "#F43F5E", mb: 1.5, filter: "drop-shadow(0 0 12px rgba(244,63,94,0.4))" }} />;
+        return <ErrorOutlineIcon sx={{ fontSize: 72, color: theme.palette.error.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(244,63,94,0.4))" }} />;
       default:
-        return <InfoOutlinedIcon sx={{ fontSize: 72, color: "#3B82F6", mb: 1.5, filter: "drop-shadow(0 0 12px rgba(59,130,246,0.4))" }} />;
+        return <InfoOutlinedIcon sx={{ fontSize: 72, color: theme.palette.info.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(59,130,246,0.4))" }} />;
     }
   };
 
@@ -67,7 +78,7 @@ function CustomDialog({
           p: 3,
           textAlign: "center",
           borderRadius: 4,
-          background: "linear-gradient(145deg, #172036 0%, #0F172A 100%)",
+          background: theme.palette.custom.dialogGradient,
           border: "1px solid rgba(148, 163, 184, 0.15)",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.85)",
           overflow: "hidden",
@@ -81,12 +92,12 @@ function CustomDialog({
             height: "4px",
             background:
               type === "success"
-                ? "linear-gradient(90deg, #10B981, #34D399)"
+                ? `linear-gradient(90deg, ${theme.palette.success.main}, ${theme.palette.success.light})`
                 : type === "confirm"
-                ? "linear-gradient(90deg, #F59E0B, #FBBF24)"
+                ? `linear-gradient(90deg, ${theme.palette.warning.main}, ${theme.palette.warning.light})`
                 : type === "error"
-                ? "linear-gradient(90deg, #F43F5E, #FB7185)"
-                : "linear-gradient(90deg, #3B82F6, #60A5FA)",
+                ? `linear-gradient(90deg, ${theme.palette.error.main}, ${theme.palette.error.light})`
+                : `linear-gradient(90deg, ${theme.palette.info.main}, ${theme.palette.info.light})`,
           },
         },
       }}
@@ -94,10 +105,10 @@ function CustomDialog({
       <DialogContent sx={{ px: 2, pt: 3, pb: 1 }}>
         <Box display="flex" flexDirection="column" alignItems="center">
           {getIcon()}
-          <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ color: "#F8FAFC" }}>
+          <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ color: theme.palette.text.primary }}>
             {getDefaultTitle()}
           </Typography>
-          <Typography variant="body1" sx={{ color: "#94A3B8", mt: 1, lineHeight: 1.6 }}>
+          <Typography variant="body1" sx={{ color: theme.palette.text.secondary, mt: 1, lineHeight: 1.6 }}>
             {message}
           </Typography>
         </Box>
@@ -111,11 +122,11 @@ function CustomDialog({
               sx={{
                 flex: 1,
                 borderColor: "rgba(148, 163, 184, 0.2)",
-                color: "#94A3B8",
+                color: theme.palette.text.secondary,
                 "&:hover": {
                   borderColor: "rgba(148, 163, 184, 0.4)",
                   backgroundColor: "rgba(148, 163, 184, 0.05)",
-                  color: "#F8FAFC",
+                  color: theme.palette.text.primary,
                 },
               }}
             >
@@ -124,18 +135,32 @@ function CustomDialog({
             <Button
               variant="contained"
               color="error"
-              onClick={() => {
-                if (onConfirm) onConfirm();
+              onClick={async () => {
+                if (isSubmitting) return;
+                if (onConfirm) {
+                  setIsSubmitting(true);
+                  try {
+                    await onConfirm();
+                  } finally {
+                    // Dialog usually closes in onConfirm, but just in case:
+                    setIsSubmitting(false);
+                  }
+                }
               }}
+              disabled={isSubmitting}
               sx={{
                 flex: 1,
-                background: "linear-gradient(135deg, #F43F5E 0%, #E11D48 100%)",
+                background: theme.palette.custom.errorGradient,
                 "&:hover": {
-                  background: "linear-gradient(135deg, #FB7185 0%, #F43F5E 100%)",
+                  background: theme.palette.custom.errorHoverGradient,
                 },
               }}
             >
-              {confirmText}
+              {isSubmitting ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                confirmText
+              )}
             </Button>
           </>
         ) : (
@@ -147,8 +172,8 @@ function CustomDialog({
               py: 1.2,
               background:
                 type === "error"
-                  ? "linear-gradient(135deg, #F43F5E 0%, #E11D48 100%)"
-                  : "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                  ? theme.palette.custom.errorGradient
+                  : theme.palette.custom.primaryGradient,
             }}
           >
             OK

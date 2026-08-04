@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { deleteTransaction, getRowVal, getDataRows, formatDateDisplay, capitalizeName } from "../Services/SheetService";
+import { useTheme } from "@mui/material/styles";
+import {
+  deleteTransaction,
+  getRowVal,
+  getDataRows,
+  formatDateDisplay,
+  capitalizeName,
+} from "../Services/SheetService";
 import EditTransactionModal from "./EditTransactionModal";
 import {
   Table,
@@ -24,7 +31,13 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 
-function Transactions({ transactions = [], triggerRefresh, showNotification }) {
+function Transactions({
+  transactions,
+  setTransactions,
+  triggerRefresh,
+  showNotification,
+}) {
+  const theme = useTheme();
   const [editingRow, setEditingRow] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -69,28 +82,37 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
         message: `Are you sure you want to delete the transaction for "${personName}" (₹${amountNum})? This action cannot be undone.`,
         confirmText: "Delete",
         onConfirm: async () => {
-          try {
-            await deleteTransaction(idVal);
-            if (triggerRefresh) triggerRefresh();
-            showNotification({
-              type: "success",
-              title: "Deleted!",
-              message: "Transaction deleted successfully.",
-            });
-          } catch (error) {
+          if (setTransactions) {
+            setTransactions(prev => prev.filter(r => getRowVal(r, 0, "id", null) !== idVal));
+          }
+          
+          // Fire in background
+          deleteTransaction(idVal).catch(error => {
             console.error("Delete failed:", error);
+            if (triggerRefresh) triggerRefresh();
             showNotification({
               type: "error",
               title: "Error",
               message: "Failed to delete transaction.",
             });
-          }
+          });
+
+          showNotification({
+            type: "success",
+            title: "Deleted!",
+            message: "Transaction deleted successfully.",
+          });
         },
       });
     } else {
-      const confirmDelete = window.confirm(`Delete transaction for "${personName}"?`);
+      const confirmDelete = window.confirm(
+        `Delete transaction for "${personName}"?`,
+      );
       if (confirmDelete && idVal) {
-        deleteTransaction(idVal).then(() => {
+        if (setTransactions) {
+          setTransactions(prev => prev.filter(r => getRowVal(r, 0, "id", null) !== idVal));
+        }
+        deleteTransaction(idVal).catch(() => {
           if (triggerRefresh) triggerRefresh();
         });
       }
@@ -102,9 +124,16 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
     const person = String(getRowVal(row, 1, "person", "")).toLowerCase();
     const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
     const notes = String(getRowVal(row, 5, "notes", "")).toLowerCase();
-    const method = String(getRowVal(row, 6, "method", getRowVal(row, 6, "paymentMethod", "Cash"))).toLowerCase();
+    const method = String(
+      getRowVal(row, 6, "method", getRowVal(row, 6, "paymentMethod", "Cash")),
+    ).toLowerCase();
     const query = searchQuery.toLowerCase();
-    return person.includes(query) || type.includes(query) || notes.includes(query) || method.includes(query);
+    return (
+      person.includes(query) ||
+      type.includes(query) ||
+      notes.includes(query) ||
+      method.includes(query)
+    );
   });
 
   return (
@@ -126,17 +155,30 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
               width: { xs: 36, sm: 44 },
               height: { xs: 36, sm: 44 },
               borderRadius: "12px",
-              background: "rgba(16, 185, 129, 0.15)",
-              color: "#10B981",
+              background: theme.palette.custom.successBoxBg,
+              color: theme.palette.primary.main,
             }}
           >
             <ReceiptLongIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight="bold" sx={{ color: "#F8FAFC", fontSize: { xs: "1.05rem", sm: "1.25rem" } }}>
+            <Typography
+              variant="h6"
+              fontWeight="bold"
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: { xs: "1.05rem", sm: "1.25rem" },
+              }}
+            >
               Transaction History
             </Typography>
-            <Typography variant="body2" sx={{ color: "#94A3B8", fontSize: { xs: "0.75rem", sm: "0.875rem" } }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: { xs: "0.75rem", sm: "0.875rem" },
+              }}
+            >
               {rows.length} {rows.length === 1 ? "record" : "records"} found
             </Typography>
           </Box>
@@ -150,13 +192,13 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
           sx={{
             width: { xs: "100%", sm: 260 },
             "& .MuiOutlinedInput-root": {
-              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              backgroundColor: theme.palette.custom.inputBg,
             },
           }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ color: "#94A3B8", fontSize: 20 }} />
+                <SearchIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
               </InputAdornment>
             ),
           }}
@@ -170,8 +212,8 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
           sx={{
             borderRadius: 1.5,
             overflow: "hidden",
-            border: "1px solid rgba(148, 163, 184, 0.12)",
-            backgroundColor: "rgba(19, 27, 46, 0.4)",
+            border: `1px solid ${theme.palette.divider}`,
+            backgroundColor: theme.palette.background.paper,
           }}
         >
           <Box sx={{ overflowX: "auto" }}>
@@ -184,7 +226,9 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                   <TableCell sx={{ py: 1 }}>Method</TableCell>
                   <TableCell sx={{ py: 1 }}>Date</TableCell>
                   <TableCell sx={{ py: 1 }}>Notes</TableCell>
-                  <TableCell align="center" sx={{ py: 1 }}>Actions</TableCell>
+                  <TableCell align="center" sx={{ py: 1 }}>
+                    Actions
+                  </TableCell>
                 </TableRow>
               </TableHead>
 
@@ -192,7 +236,7 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                 {filteredRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography variant="body1" sx={{ color: "#94A3B8" }}>
+                      <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
                         No transactions found.
                       </Typography>
                     </TableCell>
@@ -200,14 +244,24 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                 ) : (
                   filteredRows.map((row, index) => {
                     const idVal = getRowVal(row, 0, "id", index);
-                    const personName = capitalizeName(getRowVal(row, 1, "person", "-"));
-                    const amountNum = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
+                    const personName = capitalizeName(
+                      getRowVal(row, 1, "person", "-"),
+                    );
+                    const amountNum =
+                      parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
                     const typeVal = getRowVal(row, 3, "type", "N/A");
                     const dateVal = getRowVal(row, 4, "date", "");
                     const notesVal = getRowVal(row, 5, "notes", "");
-                    const methodVal = getRowVal(row, 6, "method", getRowVal(row, 6, "paymentMethod", "Cash"));
+                    const methodVal = getRowVal(
+                      row,
+                      6,
+                      "method",
+                      getRowVal(row, 6, "paymentMethod", "Cash"),
+                    );
                     const isLent = String(typeVal).toLowerCase() === "lent";
-                    const isSettled = String(typeVal).toLowerCase().includes("settled");
+                    const isSettled = String(typeVal)
+                      .toLowerCase()
+                      .includes("settled");
 
                     return (
                       <TableRow
@@ -215,11 +269,18 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                         sx={{
                           transition: "background-color 0.15s",
                           "&:hover": {
-                            backgroundColor: "rgba(148, 163, 184, 0.04)",
+                            backgroundColor: theme.palette.divider,
                           },
                         }}
                       >
-                        <TableCell sx={{ py: 0.75, fontWeight: 600, color: "#F8FAFC", fontSize: "0.9rem" }}>
+                        <TableCell
+                          sx={{
+                            py: 0.75,
+                            fontWeight: 600,
+                            color: theme.palette.text.primary,
+                            fontSize: "0.9rem",
+                          }}
+                        >
                           {personName}
                         </TableCell>
                         <TableCell
@@ -227,7 +288,11 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                             py: 0.75,
                             fontWeight: 700,
                             fontSize: "0.95rem",
-                            color: isSettled ? "#FB7185" : isLent ? "#34D399" : "#818CF8",
+                            color: isSettled
+                              ? theme.palette.error.main
+                              : isLent
+                                ? theme.palette.primary.main
+                                : theme.palette.secondary.main,
                           }}
                         >
                           ₹{amountNum.toLocaleString("en-IN")}
@@ -242,17 +307,21 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                               fontSize: "0.7rem",
                               borderRadius: "6px",
                               backgroundColor: isSettled
-                                ? "rgba(244, 63, 94, 0.15)"
+                                ? theme.palette.custom.errorBoxBg
                                 : isLent
-                                ? "rgba(16, 185, 129, 0.15)"
-                                : "rgba(99, 102, 241, 0.15)",
-                              color: isSettled ? "#FB7185" : isLent ? "#34D399" : "#818CF8",
+                                  ? theme.palette.custom.successBoxBg
+                                  : theme.palette.custom.secondaryBoxBg,
+                              color: isSettled
+                                ? theme.palette.error.main
+                                : isLent
+                                  ? theme.palette.primary.main
+                                  : theme.palette.secondary.main,
                               border: `1px solid ${
                                 isSettled
-                                  ? "rgba(244, 63, 94, 0.3)"
+                                  ? theme.palette.custom.errorBoxBorder
                                   : isLent
-                                  ? "rgba(16, 185, 129, 0.3)"
-                                  : "rgba(99, 102, 241, 0.3)"
+                                    ? theme.palette.custom.successBoxBorder
+                                    : theme.palette.custom.secondaryBoxBorder
                               }`,
                             }}
                           />
@@ -268,30 +337,38 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                               fontSize: "0.7rem",
                               backgroundColor:
                                 String(methodVal).toLowerCase() === "gpay"
-                                  ? "rgba(59, 130, 246, 0.15)"
+                                  ? theme.palette.custom.secondaryBoxBg
                                   : String(methodVal).toLowerCase() === "bank"
-                                  ? "rgba(168, 85, 247, 0.15)"
-                                  : "rgba(16, 185, 129, 0.15)",
+                                    ? theme.palette.custom.netPositiveBoxBg
+                                    : theme.palette.custom.successBoxBg,
                               color:
                                 String(methodVal).toLowerCase() === "gpay"
-                                  ? "#60A5FA"
+                                  ? theme.palette.secondary.main
                                   : String(methodVal).toLowerCase() === "bank"
-                                  ? "#C084FC"
-                                  : "#34D399",
+                                    ? theme.palette.custom.netPositiveColor
+                                    : theme.palette.primary.main,
                               border: `1px solid ${
                                 String(methodVal).toLowerCase() === "gpay"
-                                  ? "rgba(59, 130, 246, 0.3)"
+                                  ? theme.palette.custom.secondaryBoxBorder
                                   : String(methodVal).toLowerCase() === "bank"
-                                  ? "rgba(168, 85, 247, 0.3)"
-                                  : "rgba(16, 185, 129, 0.3)"
+                                    ? theme.palette.custom.netPositiveBoxBorder
+                                    : theme.palette.custom.successBoxBorder
                               }`,
                             }}
                           />
                         </TableCell>
-                        <TableCell sx={{ py: 0.75, color: "#94A3B8", fontSize: "0.8rem" }}>
+                        <TableCell
+                          sx={{
+                            py: 0.75,
+                            color: theme.palette.text.secondary,
+                            fontSize: "0.8rem",
+                          }}
+                        >
                           {formatDateDisplay(dateVal)}
                         </TableCell>
-                        <TableCell sx={{ py: 0.75, color: "#CBD5E1", maxWidth: 220 }}>
+                        <TableCell
+                          sx={{ py: 0.75, color: theme.palette.text.secondary, maxWidth: 220 }}
+                        >
                           <Typography
                             variant="body2"
                             sx={{
@@ -312,9 +389,9 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                                 size="small"
                                 onClick={() => handleEditClick(row)}
                                 sx={{
-                                  color: "#818CF8",
+                                  color: theme.palette.secondary.main,
                                   "&:hover": {
-                                    backgroundColor: "rgba(99, 102, 241, 0.15)",
+                                    backgroundColor: theme.palette.custom.secondaryBoxBg,
                                   },
                                 }}
                               >
@@ -327,9 +404,9 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                                 size="small"
                                 onClick={() => handleDeleteClick(row)}
                                 sx={{
-                                  color: "#F43F5E",
+                                  color: theme.palette.error.main,
                                   "&:hover": {
-                                    backgroundColor: "rgba(244, 63, 94, 0.15)",
+                                    backgroundColor: theme.palette.custom.errorBoxBg,
                                   },
                                 }}
                               >
@@ -357,11 +434,11 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
               p: 4,
               textAlign: "center",
               borderRadius: 1.5,
-              backgroundColor: "rgba(19, 27, 46, 0.4)",
-              border: "1px solid rgba(148, 163, 184, 0.12)",
+              backgroundColor: theme.palette.background.paper,
+              border: `1px solid ${theme.palette.divider}`,
             }}
           >
-            <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+            <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
               No transactions found.
             </Typography>
           </Paper>
@@ -369,14 +446,23 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
           <Stack spacing={1.2}>
             {filteredRows.map((row, index) => {
               const idVal = getRowVal(row, 0, "id", index);
-              const personName = capitalizeName(getRowVal(row, 1, "person", "-"));
+              const personName = capitalizeName(
+                getRowVal(row, 1, "person", "-"),
+              );
               const amountNum = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
               const typeVal = getRowVal(row, 3, "type", "N/A");
               const dateVal = getRowVal(row, 4, "date", "");
               const notesVal = getRowVal(row, 5, "notes", "");
-              const methodVal = getRowVal(row, 6, "method", getRowVal(row, 6, "paymentMethod", "Cash"));
+              const methodVal = getRowVal(
+                row,
+                6,
+                "method",
+                getRowVal(row, 6, "paymentMethod", "Cash"),
+              );
               const isLent = String(typeVal).toLowerCase() === "lent";
-              const isSettled = String(typeVal).toLowerCase().includes("settled");
+              const isSettled = String(typeVal)
+                .toLowerCase()
+                .includes("settled");
 
               return (
                 <Paper
@@ -384,26 +470,39 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                   elevation={0}
                   sx={{
                     px: 1.5,
-                    py: 1.2,
-                    borderRadius: 1.5,
-                    backgroundColor: "rgba(19, 27, 46, 0.6)",
-                    border: "1px solid rgba(148, 163, 184, 0.12)",
+                    py: 1.25,
+                    borderRadius: 2,
+                    backgroundColor: theme.palette.custom.cardGradient || theme.palette.background.paper,
+                    border: `1px solid ${theme.palette.divider}`,
                     transition: "border-color 0.2s",
                     "&:active": {
-                      borderColor: "rgba(16, 185, 129, 0.4)",
+                      borderColor: theme.palette.primary.main,
                     },
                   }}
                 >
                   {/* Top row: Person Name & Amount */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={0}>
-                    <Typography variant="subtitle1" fontWeight="700" sx={{ color: "#F8FAFC", fontSize: "0.95rem" }}>
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mb={0}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      fontWeight="700"
+                      sx={{ color: theme.palette.text.primary, fontSize: "0.95rem" }}
+                    >
                       {personName}
                     </Typography>
                     <Typography
                       variant="subtitle1"
                       fontWeight="800"
                       sx={{
-                        color: isSettled ? "#FB7185" : isLent ? "#34D399" : "#818CF8",
+                        color: isSettled
+                          ? theme.palette.error.main
+                          : isLent
+                            ? theme.palette.primary.main
+                            : theme.palette.secondary.main,
                         fontSize: "1rem",
                       }}
                     >
@@ -411,11 +510,22 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                     </Typography>
                   </Box>
 
-                  <Divider sx={{ borderColor: "rgba(148, 163, 184, 0.08)", my: 0.75 }} />
+                  <Divider
+                    sx={{ borderColor: "rgba(148, 163, 184, 0.08)", my: 0.75 }}
+                  />
 
                   {/* Middle row: Type chip, Method chip, Date & Actions */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Box display="flex" alignItems="center" gap={0.75} flexWrap="wrap">
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Box
+                      display="flex"
+                      alignItems="center"
+                      gap={0.75}
+                      flexWrap="wrap"
+                    >
                       <Chip
                         label={typeVal}
                         size="small"
@@ -425,17 +535,21 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                           fontSize: "0.68rem",
                           borderRadius: "6px",
                           backgroundColor: isSettled
-                            ? "rgba(244, 63, 94, 0.15)"
+                            ? theme.palette.custom.errorBoxBg
                             : isLent
-                            ? "rgba(16, 185, 129, 0.15)"
-                            : "rgba(99, 102, 241, 0.15)",
-                          color: isSettled ? "#FB7185" : isLent ? "#34D399" : "#818CF8",
+                              ? theme.palette.custom.successBoxBg
+                              : theme.palette.custom.secondaryBoxBg,
+                          color: isSettled
+                            ? theme.palette.error.main
+                            : isLent
+                              ? theme.palette.primary.main
+                              : theme.palette.secondary.main,
                           border: `1px solid ${
                             isSettled
-                              ? "rgba(244, 63, 94, 0.3)"
+                              ? theme.palette.custom.errorBoxBorder
                               : isLent
-                              ? "rgba(16, 185, 129, 0.3)"
-                              : "rgba(99, 102, 241, 0.3)"
+                                ? theme.palette.custom.successBoxBorder
+                                : theme.palette.custom.secondaryBoxBorder
                           }`,
                         }}
                       />
@@ -449,26 +563,29 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                           borderRadius: "6px",
                           backgroundColor:
                             String(methodVal).toLowerCase() === "gpay"
-                              ? "rgba(59, 130, 246, 0.15)"
+                              ? theme.palette.custom.secondaryBoxBg
                               : String(methodVal).toLowerCase() === "bank"
-                              ? "rgba(168, 85, 247, 0.15)"
-                              : "rgba(16, 185, 129, 0.15)",
+                                ? theme.palette.custom.netPositiveBoxBg
+                                : theme.palette.custom.successBoxBg,
                           color:
                             String(methodVal).toLowerCase() === "gpay"
-                              ? "#60A5FA"
+                              ? theme.palette.secondary.main
                               : String(methodVal).toLowerCase() === "bank"
-                              ? "#C084FC"
-                              : "#34D399",
+                                ? theme.palette.custom.netPositiveColor
+                                : theme.palette.primary.main,
                           border: `1px solid ${
                             String(methodVal).toLowerCase() === "gpay"
-                              ? "rgba(59, 130, 246, 0.3)"
+                              ? theme.palette.custom.secondaryBoxBorder
                               : String(methodVal).toLowerCase() === "bank"
-                              ? "rgba(168, 85, 247, 0.3)"
-                              : "rgba(16, 185, 129, 0.3)"
+                                ? theme.palette.custom.netPositiveBoxBorder
+                                : theme.palette.custom.successBoxBorder
                           }`,
                         }}
                       />
-                      <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.72rem" }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: theme.palette.text.secondary, fontSize: "0.72rem" }}
+                      >
                         {formatDateDisplay(dateVal)}
                       </Typography>
                     </Box>
@@ -479,7 +596,7 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                         size="small"
                         onClick={() => handleEditClick(row)}
                         sx={{
-                          color: "#818CF8",
+                          color: theme.palette.secondary.main,
                           backgroundColor: "rgba(99, 102, 241, 0.1)",
                           width: 28,
                           height: 28,
@@ -492,7 +609,7 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                         size="small"
                         onClick={() => handleDeleteClick(row)}
                         sx={{
-                          color: "#F43F5E",
+                          color: theme.palette.error.main,
                           backgroundColor: "rgba(244, 63, 94, 0.1)",
                           width: 28,
                           height: 28,
@@ -512,7 +629,14 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
                         borderTop: "1px dashed rgba(148, 163, 184, 0.1)",
                       }}
                     >
-                      <Typography variant="caption" sx={{ color: "#CBD5E1", fontStyle: "italic", display: "block" }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontStyle: "italic",
+                          display: "block",
+                        }}
+                      >
                         "{notesVal}"
                       </Typography>
                     </Box>
@@ -532,6 +656,7 @@ function Transactions({ transactions = [], triggerRefresh, showNotification }) {
         onSuccess={handleEditSuccess}
         onError={handleEditError}
         transactions={transactions}
+        setTransactions={setTransactions}
       />
     </Box>
   );

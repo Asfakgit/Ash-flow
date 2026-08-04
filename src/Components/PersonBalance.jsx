@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { useTheme } from "@mui/material/styles";
 import {
   Table,
   TableHead,
@@ -17,7 +18,8 @@ import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { getRowVal, getDataRows, addTransaction, capitalizeName, formatDateDisplay } from "../Services/SheetService";
 
-function PersonBalance({ transactions = [], triggerRefresh, showNotification }) {
+function PersonBalance({ transactions = [], setTransactions, triggerRefresh, showNotification }) {
+  const theme = useTheme();
   const [balances, setBalances] = useState({});
 
   useEffect(() => {
@@ -44,11 +46,9 @@ function PersonBalance({ transactions = [], triggerRefresh, showNotification }) 
         balanceMap[person] -= amount;
       }
 
-      // Track latest transaction type for this person
       latestTypeMap[person] = type;
     });
 
-    // Remove people whose latest transaction is "settled" (Closed accounts)
     Object.keys(latestTypeMap).forEach((person) => {
       if (latestTypeMap[person] === "settled" || latestTypeMap[person].includes("settled")) {
         delete balanceMap[person];
@@ -69,29 +69,38 @@ function PersonBalance({ transactions = [], triggerRefresh, showNotification }) 
           person: capitalizeName(person),
           amount: settleAmt,
           type: "Settled",
-          notes: settleAmt > 0 ? `Payment settled (₹${settleAmt.toLocaleString("en-IN")})` : "Payment settled",
+          notes: "Payment settled",
           date: formatDateDisplay(new Date().toISOString().split("T")[0]),
           method: "Cash",
         };
 
-        await addTransaction(settleTx);
-        if (triggerRefresh) triggerRefresh();
+        if (setTransactions) {
+          const newRow = [
+            settleTx.id,
+            settleTx.person,
+            settleTx.amount,
+            settleTx.type,
+            settleTx.date,
+            settleTx.notes,
+            settleTx.method,
+          ];
+          setTransactions((prev) => [...prev, newRow]);
+        }
+
+        addTransaction(settleTx).catch((err) => {
+          console.error("Settle failed:", err);
+          if (triggerRefresh) triggerRefresh();
+        });
+
         if (showNotification) {
           showNotification({
             type: "success",
             title: "Account Settled & Closed!",
-            message: `Account for "${person}" closed from active balances while keeping all records in history ✅`,
+            message: `Account for "${person}" closed from active balances ✅`,
           });
         }
       } catch (err) {
         console.error("Settle failed:", err);
-        if (showNotification) {
-          showNotification({
-            type: "error",
-            title: "Error",
-            message: "Failed to record settlement.",
-          });
-        }
       }
     };
 
@@ -116,37 +125,39 @@ function PersonBalance({ transactions = [], triggerRefresh, showNotification }) 
     <Paper
       elevation={0}
       sx={{
-        borderRadius: { xs: 3, sm: 4 },
-        p: { xs: 2, sm: 3 },
-        border: "1px solid rgba(148, 163, 184, 0.12)",
-        background: "linear-gradient(145deg, #131B2E 0%, #0F172A 100%)",
+        borderRadius: { xs: 2.5, sm: 4 },
+        p: { xs: 1.75, sm: 3 },
+        border: `1px solid ${theme.palette.divider}`,
+        background: theme.palette.custom.cardGradient,
         height: "100%",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      <Box display="flex" alignItems="center" gap={1.5} mb={{ xs: 2, sm: 3 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: { xs: 36, sm: 44 },
-            height: { xs: 36, sm: 44 },
-            borderRadius: "12px",
-            background: "rgba(59, 130, 246, 0.15)",
-            color: "#3B82F6",
-          }}
-        >
-          <PeopleAltIcon sx={{ fontSize: { xs: 22, sm: 24 } }} />
-        </Box>
-        <Box>
-          <Typography variant="h6" fontWeight="bold" sx={{ color: "#F8FAFC", fontSize: { xs: "1.05rem", sm: "1.25rem" } }}>
-            Person Balances
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#94A3B8", fontSize: { xs: "0.75rem", sm: "0.875rem" } }}>
-            {entries.length} {entries.length === 1 ? "contact" : "contacts"} active
-          </Typography>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={{ xs: 2, sm: 3 }}>
+        <Box display="flex" alignItems="center" gap={1.5}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: { xs: 36, sm: 44 },
+              height: { xs: 36, sm: 44 },
+              borderRadius: "12px",
+              background: theme.palette.custom.secondaryBoxBg,
+              color: theme.palette.info.main,
+            }}
+          >
+            <PeopleAltIcon sx={{ fontSize: { xs: 22, sm: 24 } }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight="bold" sx={{ color: theme.palette.text.primary, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}>
+              Person Balances
+            </Typography>
+            <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontSize: { xs: "0.75rem", sm: "0.875rem" } }}>
+              {entries.length} {entries.length === 1 ? "contact" : "contacts"} active
+            </Typography>
+          </Box>
         </Box>
       </Box>
 
@@ -163,7 +174,7 @@ function PersonBalance({ transactions = [], triggerRefresh, showNotification }) 
             {entries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
-                  <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                  <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
                     No active balances.
                   </Typography>
                 </TableCell>
@@ -180,7 +191,7 @@ function PersonBalance({ transactions = [], triggerRefresh, showNotification }) 
                     sx={{
                       "&:last-child td, &:last-child th": { border: 0 },
                       transition: "background-color 0.15s",
-                      "&:hover": { backgroundColor: "rgba(148, 163, 184, 0.04)" },
+                      "&:hover": { backgroundColor: theme.palette.divider },
                     }}
                   >
                     <TableCell sx={{ py: 1.5, pl: { xs: 0, sm: 2 } }}>
@@ -192,64 +203,67 @@ function PersonBalance({ transactions = [], triggerRefresh, showNotification }) 
                             fontSize: { xs: "0.75rem", sm: "0.85rem" },
                             fontWeight: "700",
                             bgcolor: isPositive
-                              ? "rgba(16, 185, 129, 0.2)"
+                              ? theme.palette.custom.successBoxBorder
                               : isNegative
-                              ? "rgba(244, 63, 94, 0.2)"
+                              ? theme.palette.custom.errorBoxBorder
                               : "rgba(148, 163, 184, 0.2)",
                             color: isPositive
-                              ? "#34D399"
+                              ? theme.palette.primary.main
                               : isNegative
-                              ? "#FB7185"
-                              : "#CBD5E1",
+                              ? theme.palette.error.main
+                              : theme.palette.text.secondary,
                           }}
                         >
                           {initial}
                         </Avatar>
-                        <Typography variant="body2" fontWeight="600" sx={{ color: "#F8FAFC", fontSize: { xs: "0.85rem", sm: "0.875rem" } }}>
-                          {person}
-                        </Typography>
+                        <Box>
+                          <Typography variant="body2" fontWeight="600" sx={{ color: theme.palette.text.primary, fontSize: { xs: "0.85rem", sm: "0.875rem" } }}>
+                            {person}
+                          </Typography>
+                        </Box>
                       </Box>
                     </TableCell>
+
                     <TableCell align="right" sx={{ py: 1.5, pr: { xs: 0, sm: 2 } }}>
-                        <Chip
-                          label={
+                      <Chip
+                        label={
+                          isPositive
+                            ? `You Lent ₹${balance.toLocaleString("en-IN")}`
+                            : isNegative
+                            ? `You Owe ₹${Math.abs(balance).toLocaleString("en-IN")}`
+                            : "Settled"
+                        }
+                        size="small"
+                        onDelete={() => handleSettlePerson(person, balance)}
+                        deleteIcon={
+                          <Tooltip title="Payment Settling">
+                            <CheckCircleOutlineIcon sx={{ color: "inherit !important", "&:hover": { color: "#ffffff !important" } }} />
+                          </Tooltip>
+                        }
+                        sx={{
+                          fontWeight: 700,
+                          borderRadius: "8px",
+                          px: 0.5,
+                          fontSize: { xs: "0.7rem", sm: "0.75rem" },
+                          backgroundColor: isPositive
+                            ? "rgba(16, 185, 129, 0.15)"
+                            : isNegative
+                            ? "rgba(244, 63, 94, 0.15)"
+                            : "rgba(148, 163, 184, 0.15)",
+                          color: isPositive
+                            ? theme.palette.primary.main
+                            : isNegative
+                            ? theme.palette.error.main
+                            : theme.palette.text.secondary,
+                          border: `1px solid ${
                             isPositive
-                              ? `You Lent ₹${balance.toLocaleString("en-IN")}`
+                              ? "rgba(16, 185, 129, 0.3)"
                               : isNegative
-                              ? `You Owe ₹${Math.abs(balance).toLocaleString("en-IN")}`
-                              : "Settled"
-                          }
-                          size="small"
-                          onDelete={() => handleSettlePerson(person, balance)}
-                          deleteIcon={
-                            <Tooltip title="Payment Settling">
-                              <CheckCircleOutlineIcon sx={{ color: "inherit !important", "&:hover": { color: "#ffffff !important" } }} />
-                            </Tooltip>
-                          }
-                          sx={{
-                            fontWeight: 700,
-                            borderRadius: "8px",
-                            px: 0.5,
-                            fontSize: { xs: "0.7rem", sm: "0.75rem" },
-                            backgroundColor: isPositive
-                              ? "rgba(16, 185, 129, 0.15)"
-                              : isNegative
-                              ? "rgba(244, 63, 94, 0.15)"
-                              : "rgba(148, 163, 184, 0.15)",
-                            color: isPositive
-                              ? "#34D399"
-                              : isNegative
-                              ? "#FB7185"
-                              : "#CBD5E1",
-                            border: `1px solid ${
-                              isPositive
-                                ? "rgba(16, 185, 129, 0.3)"
-                                : isNegative
-                                ? "rgba(244, 63, 94, 0.3)"
-                                : "rgba(148, 163, 184, 0.3)"
-                            }`,
-                          }}
-                        />
+                              ? "rgba(244, 63, 94, 0.3)"
+                              : "rgba(148, 163, 184, 0.3)"
+                          }`,
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 );
