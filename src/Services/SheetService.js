@@ -287,8 +287,21 @@ export const getTodayDisplay = () => {
 
 export const formatDateDisplay = (dateStr) => {
   if (!dateStr) return "-";
-  if (dateStr instanceof Date || (typeof dateStr === "string" && (dateStr.includes("T") || dateStr.includes("Z")))) {
-    const d = new Date(dateStr);
+
+  // Handle Date objects
+  if (dateStr instanceof Date) {
+    if (isNaN(dateStr.getTime())) return "-";
+    const year = dateStr.getFullYear();
+    const month = String(dateStr.getMonth() + 1).padStart(2, "0");
+    const day = String(dateStr.getDate()).padStart(2, "0");
+    return `${day}/${month}/${year}`;
+  }
+
+  const rawStr = String(dateStr).trim();
+
+  // Handle numeric timestamps (ms or sec)
+  if (typeof dateStr === "number" || /^\d{10,13}$/.test(rawStr)) {
+    const d = new Date(Number(rawStr));
     if (!isNaN(d.getTime())) {
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -296,17 +309,34 @@ export const formatDateDisplay = (dateStr) => {
       return `${day}/${month}/${year}`;
     }
   }
-  const str = String(dateStr).split("T")[0];
+
+  // Handle ISO strings with T or Z
+  if (rawStr.includes("T") || rawStr.includes("Z")) {
+    const d = new Date(rawStr);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${day}/${month}/${year}`;
+    }
+  }
+
+  const str = rawStr.split("T")[0].split(" ")[0];
+
+  // YYYY-MM-DD or YYYY/MM/DD
   const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (ymdMatch) {
     const [, year, month, day] = ymdMatch;
     return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
   }
+
+  // DD-MM-YYYY or DD/MM/YYYY
   const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
   if (dmyMatch) {
     const [, day, month, year] = dmyMatch;
     return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
   }
+
   return str;
 };
 

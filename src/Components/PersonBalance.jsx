@@ -25,9 +25,16 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
   useEffect(() => {
     const rows = getDataRows(transactions);
     const balanceMap = {};
-    const latestTypeMap = {};
+    const hasSettledMap = {};
 
-    rows.forEach((row) => {
+    // Sort rows from oldest to newest by id so running balance is calculated chronologically
+    const sortedRows = [...rows].sort((a, b) => {
+      const idA = Number(getRowVal(a, 0, "id", 0)) || 0;
+      const idB = Number(getRowVal(b, 0, "id", 0)) || 0;
+      return idA - idB;
+    });
+
+    sortedRows.forEach((row) => {
       const rawPerson = getRowVal(row, 1, "person", "");
       if (!rawPerson || !String(rawPerson).trim()) return;
       const person = capitalizeName(rawPerson);
@@ -40,17 +47,18 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
 
       if (type === "settled" || type.includes("settled")) {
         balanceMap[person] = 0;
+        hasSettledMap[person] = true;
       } else if (type === "lent") {
         balanceMap[person] += amount;
+        hasSettledMap[person] = false;
       } else if (type === "borrowed") {
         balanceMap[person] -= amount;
+        hasSettledMap[person] = false;
       }
-
-      latestTypeMap[person] = type;
     });
 
-    Object.keys(latestTypeMap).forEach((person) => {
-      if (latestTypeMap[person] === "settled" || latestTypeMap[person].includes("settled")) {
+    Object.keys(balanceMap).forEach((person) => {
+      if (Math.abs(balanceMap[person]) < 0.01 || hasSettledMap[person]) {
         delete balanceMap[person];
       }
     });
@@ -75,16 +83,16 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
         };
 
         if (setTransactions) {
-          const newRow = [
-            settleTx.id,
-            settleTx.person,
-            settleTx.amount,
-            settleTx.type,
-            settleTx.date,
-            settleTx.notes,
-            settleTx.method,
-          ];
-          setTransactions((prev) => [...prev, newRow]);
+          const newRow = {
+            id: settleTx.id,
+            person: settleTx.person,
+            amount: settleTx.amount,
+            type: settleTx.type,
+            date: settleTx.date,
+            notes: settleTx.notes,
+            method: settleTx.method,
+          };
+          setTransactions((prev) => [newRow, ...prev]);
         }
 
         addTransaction(settleTx).catch((err) => {
