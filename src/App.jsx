@@ -149,7 +149,7 @@ function App() {
           transition: "background 0.3s ease, color 0.3s ease",
           width: "100%",
           maxWidth: "100vw",
-          overflowX: "hidden",
+          overflowX: "clip",
         }}
       >
         <Navbar onOpenReports={() => setReportsOpen(true)} />
