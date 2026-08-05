@@ -24,6 +24,7 @@ import {
   getTodayDisplay,
   isValidDate,
 } from "../Services/SheetService";
+import soundEffects from "../Services/soundEffects";
 function AddTransaction({
   transactions = [],
   setTransactions,
@@ -144,6 +145,12 @@ function AddTransaction({
     setLoading(true);
 
     try {
+      if (type === "Settled") {
+        soundEffects.playSettle();
+      } else {
+        soundEffects.playAdd();
+      }
+
       if (setTransactions) {
         // Optimistic UI update
         const newRow = {
@@ -197,13 +204,15 @@ function AddTransaction({
     <Paper
       elevation={0}
       sx={{
-        borderRadius: { xs: 2.5, sm: 4 },
-        p: { xs: 1.75, sm: 3 },
+        borderRadius: { xs: "6px", sm: "8px" },
+        p: { xs: 1.75, sm: 2.5 },
         border: `1px solid ${theme.palette.divider}`,
         background: theme.palette.custom.cardGradient,
         height: "100%",
         display: "flex",
         flexDirection: "column",
+        width: "100%",
+        boxSizing: "border-box",
       }}
     >
       <Box display="flex" alignItems="center" gap={1.5} mb={{ xs: 2, sm: 3 }}>
@@ -212,14 +221,14 @@ function AddTransaction({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: { xs: 36, sm: 44 },
-            height: { xs: 36, sm: 44 },
-            borderRadius: "12px",
+            width: { xs: 34, sm: 40 },
+            height: { xs: 34, sm: 40 },
+            borderRadius: { xs: "6px", sm: "8px" },
             background: theme.palette.custom.successBoxBg,
             color: theme.palette.primary.main,
           }}
         >
-          <PostAddIcon sx={{ fontSize: { xs: 22, sm: 24 } }} />
+          <PostAddIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
         </Box>
         <Box>
           <Typography
@@ -388,11 +397,11 @@ function AddTransaction({
             onClick={saveData}
             disabled={loading}
             sx={{
-              py: { xs: 1.4, sm: 1.3 },
-              minHeight: 46,
-              borderRadius: 3,
+              py: { xs: 1.2, sm: 1.2 },
+              minHeight: 44,
+              borderRadius: 1.5,
               fontWeight: 700,
-              fontSize: "0.95rem",
+              fontSize: "0.92rem",
               background:
                 type === "Settled"
                   ? theme.palette.custom.errorGradient

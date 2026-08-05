@@ -9,20 +9,26 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
 html {
   scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100vw;
   min-width: 320px;
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
 }
 
 a {

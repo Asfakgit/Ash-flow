@@ -16,9 +16,21 @@ import {
 } from "@mui/material";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import { getRowVal, getDataRows, addTransaction, capitalizeName, formatDateDisplay } from "../Services/SheetService";
+import soundEffects from "../Services/soundEffects";
+import {
+  getRowVal,
+  getDataRows,
+  addTransaction,
+  capitalizeName,
+  formatDateDisplay,
+} from "../Services/SheetService";
 
-function PersonBalance({ transactions = [], setTransactions, triggerRefresh, showNotification }) {
+function PersonBalance({
+  transactions = [],
+  setTransactions,
+  triggerRefresh,
+  showNotification,
+}) {
   const theme = useTheme();
   const [balances, setBalances] = useState({});
 
@@ -71,7 +83,10 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
 
     const executeSettle = async () => {
       try {
-        const settleAmt = Math.abs(balance !== undefined ? balance : (balances[person] || 0));
+        soundEffects.playSettle();
+        const settleAmt = Math.abs(
+          balance !== undefined ? balance : balances[person] || 0,
+        );
         const settleTx = {
           id: Date.now(),
           person: capitalizeName(person),
@@ -133,48 +148,114 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
     <Paper
       elevation={0}
       sx={{
-        borderRadius: { xs: 2.5, sm: 4 },
-        p: { xs: 1.75, sm: 3 },
+        borderRadius: { xs: "6px", sm: "8px" },
+        p: { xs: 1.75, sm: 2.5 },
         border: `1px solid ${theme.palette.divider}`,
         background: theme.palette.custom.cardGradient,
         height: "100%",
         display: "flex",
         flexDirection: "column",
+        width: "100%",
+        boxSizing: "border-box",
       }}
     >
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={{ xs: 2, sm: 3 }}>
+      <Box
+        display="flex"
+        alignItems="center"
+        justifyContent="space-between"
+        mb={{ xs: 2, sm: 3 }}
+      >
         <Box display="flex" alignItems="center" gap={1.5}>
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: { xs: 36, sm: 44 },
-              height: { xs: 36, sm: 44 },
-              borderRadius: "12px",
+              width: { xs: 34, sm: 40 },
+              height: { xs: 34, sm: 40 },
+              borderRadius: { xs: "6px", sm: "8px" },
               background: theme.palette.custom.secondaryBoxBg,
               color: theme.palette.info.main,
             }}
           >
-            <PeopleAltIcon sx={{ fontSize: { xs: 22, sm: 24 } }} />
+            <PeopleAltIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight="bold" sx={{ color: theme.palette.text.primary, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}>
+            <Typography
+              variant="h6"
+              fontWeight="bold"
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: { xs: "1.05rem", sm: "1.25rem" },
+              }}
+            >
               Person Balances
             </Typography>
-            <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontSize: { xs: "0.75rem", sm: "0.875rem" } }}>
-              {entries.length} {entries.length === 1 ? "contact" : "contacts"} active
+            <Typography
+              variant="body2"
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: { xs: "0.75rem", sm: "0.875rem" },
+              }}
+            >
+              {entries.length} {entries.length === 1 ? "contact" : "contacts"}{" "}
+              active
             </Typography>
           </Box>
         </Box>
       </Box>
 
-      <Box sx={{ overflowX: "auto", flexGrow: 1 }}>
-        <Table size="small">
+      <Box
+        sx={{
+          overflowX: "auto",
+          overflowY: "auto",
+          maxHeight: { xs: 460, sm: 520 },
+          flexGrow: 1,
+          pr: 0.5,
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+          overscrollBehaviorY: "auto",
+          "&::-webkit-scrollbar": { width: "5px" },
+          "&::-webkit-scrollbar-thumb": {
+            backgroundColor: theme.palette.custom.scrollbarThumb,
+            borderRadius: "4px",
+          },
+        }}
+      >
+        <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ pl: { xs: 0, sm: 2 } }}>Person</TableCell>
-              <TableCell align="right" sx={{ pr: { xs: 0, sm: 2 } }}>Status</TableCell>
+              <TableCell
+                sx={{
+                  pl: { xs: 1, sm: 2 },
+                  backgroundColor:
+                    theme.palette.custom.tableHeaderBg ||
+                    theme.palette.background.paper,
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.palette.text.secondary,
+                }}
+              >
+                Person
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{
+                  pr: { xs: 1, sm: 2 },
+                  backgroundColor:
+                    theme.palette.custom.tableHeaderBg ||
+                    theme.palette.background.paper,
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.palette.text.secondary,
+                }}
+              >
+                Status
+              </TableCell>
             </TableRow>
           </TableHead>
 
@@ -182,7 +263,10 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
             {entries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
-                  <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: theme.palette.text.secondary }}
+                  >
                     No active balances.
                   </Typography>
                 </TableCell>
@@ -202,7 +286,7 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
                       "&:hover": { backgroundColor: theme.palette.divider },
                     }}
                   >
-                    <TableCell sx={{ py: 1.5, pl: { xs: 0, sm: 2 } }}>
+                    <TableCell sx={{ py: 0.9, pl: { xs: 0, sm: 2 } }}>
                       <Box display="flex" alignItems="center" gap={1.2}>
                         <Avatar
                           sx={{
@@ -225,53 +309,89 @@ function PersonBalance({ transactions = [], setTransactions, triggerRefresh, sho
                           {initial}
                         </Avatar>
                         <Box>
-                          <Typography variant="body2" fontWeight="600" sx={{ color: theme.palette.text.primary, fontSize: { xs: "0.85rem", sm: "0.875rem" } }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight="600"
+                            sx={{
+                              color: theme.palette.text.primary,
+                              fontSize: { xs: "0.85rem", sm: "0.875rem" },
+                            }}
+                          >
                             {person}
                           </Typography>
                         </Box>
                       </Box>
                     </TableCell>
 
-                    <TableCell align="right" sx={{ py: 1.5, pr: { xs: 0, sm: 2 } }}>
-                      <Chip
-                        label={
-                          isPositive
-                            ? `You Lent ₹${balance.toLocaleString("en-IN")}`
-                            : isNegative
-                            ? `You Owe ₹${Math.abs(balance).toLocaleString("en-IN")}`
-                            : "Settled"
-                        }
-                        size="small"
-                        onDelete={() => handleSettlePerson(person, balance)}
-                        deleteIcon={
-                          <Tooltip title="Payment Settling">
-                            <CheckCircleOutlineIcon sx={{ color: "inherit !important", "&:hover": { color: "#ffffff !important" } }} />
-                          </Tooltip>
-                        }
-                        sx={{
-                          fontWeight: 700,
-                          borderRadius: "8px",
-                          px: 0.5,
-                          fontSize: { xs: "0.7rem", sm: "0.75rem" },
-                          backgroundColor: isPositive
-                            ? "rgba(16, 185, 129, 0.15)"
-                            : isNegative
-                            ? "rgba(244, 63, 94, 0.15)"
-                            : "rgba(148, 163, 184, 0.15)",
-                          color: isPositive
-                            ? theme.palette.primary.main
-                            : isNegative
-                            ? theme.palette.error.main
-                            : theme.palette.text.secondary,
-                          border: `1px solid ${
+                    <TableCell
+                      align="right"
+                      sx={{ py: 0.9, pr: { xs: 0, sm: 2 } }}
+                    >
+                      <Tooltip title="Click to Settle Account">
+                        <Chip
+                          clickable
+                          onClick={() => handleSettlePerson(person, balance)}
+                          onDelete={() => handleSettlePerson(person, balance)}
+                          deleteIcon={
+                            <CheckCircleOutlineIcon
+                              sx={{
+                                fontSize: "0.95rem !important",
+                                color: "inherit !important",
+                                marginLeft: "4px !important",
+                                marginRight: "-2px !important",
+                                opacity: 0.95,
+                              }}
+                            />
+                          }
+                          label={
                             isPositive
-                              ? "rgba(16, 185, 129, 0.3)"
+                              ? `You Lent ₹${balance.toLocaleString("en-IN")}`
                               : isNegative
-                              ? "rgba(244, 63, 94, 0.3)"
-                              : "rgba(148, 163, 184, 0.3)"
-                          }`,
-                        }}
-                      />
+                              ? `You Owe ₹${Math.abs(balance).toLocaleString(
+                                  "en-IN",
+                                )}`
+                              : "Settled"
+                          }
+                          size="small"
+                          sx={{
+                            fontWeight: 700,
+                            borderRadius: "6px",
+                            px: 0.75,
+                            py: 1.5,
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            "&:hover": {
+                              transform: "scale(1.04)",
+                              backgroundColor: isPositive
+                                ? "rgba(16, 185, 129, 0.28)"
+                                : isNegative
+                                ? "rgba(244, 63, 94, 0.28)"
+                                : "rgba(148, 163, 184, 0.28)",
+                            },
+                            "&:active": {
+                              transform: "scale(0.95)",
+                            },
+                            fontSize: { xs: "0.7rem", sm: "0.75rem" },
+                            backgroundColor: isPositive
+                              ? "rgba(16, 185, 129, 0.15)"
+                              : isNegative
+                              ? "rgba(244, 63, 94, 0.15)"
+                              : "rgba(148, 163, 184, 0.15)",
+                            color: isPositive
+                              ? theme.palette.primary.main
+                              : isNegative
+                              ? theme.palette.error.main
+                              : theme.palette.text.secondary,
+                            border: `1px solid ${
+                              isPositive
+                                ? "rgba(16, 185, 129, 0.3)"
+                                : isNegative
+                                ? "rgba(244, 63, 94, 0.3)"
+                                : "rgba(148, 163, 184, 0.3)"
+                            }`,
+                          }}
+                        />
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 );

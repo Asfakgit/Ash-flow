@@ -7,6 +7,7 @@ import {
   Button,
   Box,
   Slide,
+  Zoom,
   CircularProgress,
 } from "@mui/material";
 import { forwardRef, useState, useEffect } from "react";
@@ -16,7 +17,19 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 const Transition = forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />;
+  return (
+    <Zoom
+      ref={ref}
+      {...props}
+      timeout={{ enter: 360, exit: 220 }}
+      style={{
+        transformOrigin: "center center",
+        transitionTimingFunction: props.in
+          ? "cubic-bezier(0.34, 1.56, 0.64, 1)"
+          : "cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    />
+  );
 });
 
 function CustomDialog({
@@ -35,19 +48,63 @@ function CustomDialog({
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
+      const origBodyOverflow = document.body.style.overflow;
+      const origHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = origBodyOverflow;
+        document.documentElement.style.overflow = origHtmlOverflow;
+      };
     }
   }, [open]);
 
   const getIcon = () => {
     switch (type) {
       case "success":
-        return <CheckCircleOutlineIcon sx={{ fontSize: 72, color: theme.palette.success.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(16,185,129,0.4))" }} />;
+        return (
+          <CheckCircleOutlineIcon
+            sx={{
+              fontSize: 72,
+              color: theme.palette.success.main,
+              mb: 1.5,
+              filter: "drop-shadow(0 0 12px rgba(16,185,129,0.4))",
+            }}
+          />
+        );
       case "confirm":
-        return <WarningAmberIcon sx={{ fontSize: 72, color: theme.palette.warning.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(245,158,11,0.4))" }} />;
+        return (
+          <WarningAmberIcon
+            sx={{
+              fontSize: 72,
+              color: theme.palette.warning.main,
+              mb: 1.5,
+              filter: "drop-shadow(0 0 12px rgba(245,158,11,0.4))",
+            }}
+          />
+        );
       case "error":
-        return <ErrorOutlineIcon sx={{ fontSize: 72, color: theme.palette.error.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(244,63,94,0.4))" }} />;
+        return (
+          <ErrorOutlineIcon
+            sx={{
+              fontSize: 72,
+              color: theme.palette.error.main,
+              mb: 1.5,
+              filter: "drop-shadow(0 0 12px rgba(244,63,94,0.4))",
+            }}
+          />
+        );
       default:
-        return <InfoOutlinedIcon sx={{ fontSize: 72, color: theme.palette.info.main, mb: 1.5, filter: "drop-shadow(0 0 12px rgba(59,130,246,0.4))" }} />;
+        return (
+          <InfoOutlinedIcon
+            sx={{
+              fontSize: 72,
+              color: theme.palette.info.main,
+              mb: 1.5,
+              filter: "drop-shadow(0 0 12px rgba(59,130,246,0.4))",
+            }}
+          />
+        );
     }
   };
 
@@ -75,9 +132,9 @@ function CustomDialog({
       fullWidth
       PaperProps={{
         sx: {
-          p: 3,
+          p: { xs: 2.5, sm: 3 },
           textAlign: "center",
-          borderRadius: 4,
+          borderRadius: { xs: 1.5, sm: 2 },
           background: theme.palette.custom.dialogGradient,
           border: "1px solid rgba(148, 163, 184, 0.15)",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.85)",
@@ -105,10 +162,18 @@ function CustomDialog({
       <DialogContent sx={{ px: 2, pt: 3, pb: 1 }}>
         <Box display="flex" flexDirection="column" alignItems="center">
           {getIcon()}
-          <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ color: theme.palette.text.primary }}>
+          <Typography
+            variant="h5"
+            fontWeight="bold"
+            gutterBottom
+            sx={{ color: theme.palette.text.primary }}
+          >
             {getDefaultTitle()}
           </Typography>
-          <Typography variant="body1" sx={{ color: theme.palette.text.secondary, mt: 1, lineHeight: 1.6 }}>
+          <Typography
+            variant="body1"
+            sx={{ color: theme.palette.text.secondary, mt: 1, lineHeight: 1.6 }}
+          >
             {message}
           </Typography>
         </Box>

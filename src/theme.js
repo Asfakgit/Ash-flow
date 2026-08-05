@@ -17,7 +17,7 @@ const typography = {
   button: { fontWeight: 700, textTransform: "none", letterSpacing: "-0.01em" },
 };
 
-const shape = { borderRadius: 20 };
+const shape = { borderRadius: 6 };
 
 const getComponents = (palette) => ({
   MuiCssBaseline: {
@@ -31,8 +31,13 @@ const getComponents = (palette) => ({
         scrollbarWidth: "thin",
         "&::-webkit-scrollbar": { width: "6px", height: "6px" },
         "&::-webkit-scrollbar-track": { background: "transparent" },
-        "&::-webkit-scrollbar-thumb": { backgroundColor: palette.custom.scrollbarThumb, borderRadius: "10px" },
+        "&::-webkit-scrollbar-thumb": { backgroundColor: palette.custom.scrollbarThumb, borderRadius: "4px" },
         "&::-webkit-scrollbar-thumb:hover": { backgroundColor: palette.custom.scrollbarHover },
+        "@media (max-width: 600px)": {
+          "& .MuiPaper-root, & .MuiCard-root, & .MuiButton-root, & .MuiOutlinedInput-root, & .MuiChip-root, & .MuiDialog-paper, & .MuiToggleButton-root, & .MuiIconButton-root, & .MuiAvatar-root, & div[role='dialog']": {
+            borderRadius: "6px !important",
+          },
+        },
       },
     },
   },
@@ -43,7 +48,7 @@ const getComponents = (palette) => ({
         backgroundColor: palette.background.paper,
         border: `1px solid ${palette.divider}`,
         boxShadow: palette.custom.paperShadow,
-        borderRadius: 24,
+        borderRadius: 8,
         backdropFilter: "blur(30px) saturate(190%)",
         WebkitBackdropFilter: "blur(30px) saturate(190%)",
         transition: "transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.2s ease",
@@ -53,7 +58,7 @@ const getComponents = (palette) => ({
   MuiCard: {
     styleOverrides: {
       root: {
-        borderRadius: 24,
+        borderRadius: 8,
         background: palette.custom.cardGradient,
         backdropFilter: "blur(30px) saturate(190%)",
         WebkitBackdropFilter: "blur(30px) saturate(190%)",
@@ -64,8 +69,8 @@ const getComponents = (palette) => ({
   MuiButton: {
     styleOverrides: {
       root: {
-        borderRadius: 100, // Apple iOS Pill Buttons
-        padding: "10px 24px",
+        borderRadius: 6,
+        padding: "8px 16px",
         boxShadow: "none",
         fontWeight: 700,
         transition: "transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.2s ease, box-shadow 0.2s ease",
@@ -88,7 +93,7 @@ const getComponents = (palette) => ({
   MuiDialog: {
     styleOverrides: {
       paper: {
-        borderRadius: 28,
+        borderRadius: 10,
         background: palette.custom.dialogGradient,
         backdropFilter: "blur(35px) saturate(200%)",
         WebkitBackdropFilter: "blur(35px) saturate(200%)",
@@ -101,7 +106,7 @@ const getComponents = (palette) => ({
     styleOverrides: {
       root: {
         borderBottom: `1px solid ${palette.divider}`,
-        padding: "14px 16px",
+        padding: "12px 14px",
       },
       head: {
         fontWeight: 700,
@@ -117,7 +122,7 @@ const getComponents = (palette) => ({
     styleOverrides: {
       root: {
         "& .MuiOutlinedInput-root": {
-          borderRadius: 16,
+          borderRadius: 6,
           backgroundColor: palette.custom.inputBg,
           transition: "all 0.2s cubic-bezier(0.25, 1, 0.5, 1)",
           "&:hover .MuiOutlinedInput-notchedOutline": {

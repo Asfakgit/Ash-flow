@@ -7,6 +7,7 @@ import {
   IconButton,
   Paper,
   Tooltip,
+  Zoom,
 } from "@mui/material";
 import { forwardRef, useState, useEffect, useRef } from "react";
 import CloseIcon from "@mui/icons-material/Close";
@@ -16,7 +17,19 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useTheme } from "@mui/material/styles";
 
 const Transition = forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />;
+  return (
+    <Zoom
+      ref={ref}
+      {...props}
+      timeout={{ enter: 380, exit: 240 }}
+      style={{
+        transformOrigin: "center center",
+        transitionTimingFunction: props.in
+          ? "cubic-bezier(0.34, 1.56, 0.64, 1)"
+          : "cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    />
+  );
 });
 
 function AppInfoModal({ open, onClose }) {
@@ -34,6 +47,20 @@ function AppInfoModal({ open, onClose }) {
       localStorage.removeItem("app_avatar_img");
     }
   }, [avatarImage]);
+
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      const origBodyOverflow = document.body.style.overflow;
+      const origHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = origBodyOverflow;
+        document.documentElement.style.overflow = origHtmlOverflow;
+      };
+    }
+  }, [open]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -62,10 +89,11 @@ function AppInfoModal({ open, onClose }) {
       PaperProps={{
         elevation: 0,
         sx: {
-          borderRadius: 3,
-          background: theme.palette.mode === "dark" 
-            ? "rgba(18, 18, 20, 0.92)" 
-            : "rgba(255, 255, 255, 0.95)",
+          borderRadius: { xs: 1.5, sm: 2 },
+          background:
+            theme.palette.mode === "dark"
+              ? "rgba(18, 18, 20, 0.92)"
+              : "rgba(255, 255, 255, 0.95)",
           backdropFilter: "blur(35px) saturate(190%)",
           WebkitBackdropFilter: "blur(35px) saturate(190%)",
           border: `1px solid ${theme.palette.divider}`,
@@ -90,7 +118,15 @@ function AppInfoModal({ open, onClose }) {
         <CloseIcon fontSize="small" />
       </IconButton>
 
-      <DialogContent sx={{ px: { xs: 2.5, sm: 4 }, pb: { xs: 3, sm: 4 }, pt: { xs: 3.5, sm: 4 }, textAlign: "center", overflow: "hidden" }}>
+      <DialogContent
+        sx={{
+          px: { xs: 2.5, sm: 4 },
+          pb: { xs: 3, sm: 4 },
+          pt: { xs: 3.5, sm: 4 },
+          textAlign: "center",
+          overflow: "hidden",
+        }}
+      >
         {/* Hidden File Input for Avatar */}
         <input
           type="file"
@@ -101,8 +137,21 @@ function AppInfoModal({ open, onClose }) {
         />
 
         {/* Editable Round Profile Avatar Area - Fully Visible */}
-        <Box sx={{ position: "relative", width: 88, height: 88, mx: "auto", mb: 2, mt: 0 }}>
-          <Tooltip title="Click to change profile picture" arrow placement="top">
+        <Box
+          sx={{
+            position: "relative",
+            width: 88,
+            height: 88,
+            mx: "auto",
+            mb: 2,
+            mt: 0,
+          }}
+        >
+          <Tooltip
+            title="Click to change profile picture"
+            arrow
+            placement="top"
+          >
             <Box
               onClick={() => fileInputRef.current?.click()}
               sx={{
@@ -141,7 +190,9 @@ function AppInfoModal({ open, onClose }) {
                   sx={{
                     color: theme.palette.text.primary,
                     letterSpacing: "-0.05em",
-                    background: theme.palette.custom.titleGradient || theme.palette.custom.primaryGradient,
+                    background:
+                      theme.palette.custom.titleGradient ||
+                      theme.palette.custom.primaryGradient,
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                   }}
@@ -192,11 +243,29 @@ function AppInfoModal({ open, onClose }) {
         </Box>
 
         {/* Title */}
-        <Typography variant="h5" fontWeight="800" sx={{ color: theme.palette.text.primary, mb: 0.2, letterSpacing: "-0.03em" }}>
+        <Typography
+          variant="h5"
+          fontWeight="800"
+          sx={{
+            color: theme.palette.text.primary,
+            mb: 0.2,
+            letterSpacing: "-0.03em",
+          }}
+        >
           ASH FLOW
         </Typography>
 
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", display: "block", mb: 2 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: theme.palette.text.secondary,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            display: "block",
+            mb: 2,
+          }}
+        >
           Created August 5, 2026
         </Typography>
 
@@ -205,7 +274,7 @@ function AppInfoModal({ open, onClose }) {
           elevation={0}
           sx={{
             p: 2.5,
-            borderRadius: 2.5,
+            borderRadius: 1.5,
             background: theme.palette.custom.cardGradient,
             border: `1px solid ${theme.palette.divider}`,
             textAlign: "left",
@@ -215,8 +284,18 @@ function AppInfoModal({ open, onClose }) {
           }}
         >
           <Box display="flex" alignItems="center" gap={1} mb={1}>
-            <AutoAwesomeIcon sx={{ color: theme.palette.primary.main, fontSize: 18 }} />
-            <Typography variant="subtitle2" fontWeight="800" sx={{ color: theme.palette.primary.main, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <AutoAwesomeIcon
+              sx={{ color: theme.palette.primary.main, fontSize: 18 }}
+            />
+            <Typography
+              variant="subtitle2"
+              fontWeight="800"
+              sx={{
+                color: theme.palette.primary.main,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
               My Story & Dedication
             </Typography>
           </Box>
@@ -230,7 +309,12 @@ function AppInfoModal({ open, onClose }) {
               fontSize: "0.88rem",
             }}
           >
-            Ash Flow is my first flagship application to track financial flow, created on August 5, 2026. Built through tireless dedication, continuous design iterations, and relentless effort, every single screen, theme, and animation was engineered to deliver instant performance, crisp iOS aesthetics, and an effortless money tracking experience.
+            Ash Flow is my first flagship application to track financial flow,
+            created on August 5, 2026. Built through tireless dedication,
+            continuous design iterations, and relentless effort, every single
+            screen, theme, and animation was engineered to deliver instant
+            performance, crisp iOS aesthetics, and an effortless money tracking
+            experience.
           </Typography>
         </Paper>
       </DialogContent>

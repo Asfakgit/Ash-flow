@@ -26,11 +26,11 @@ const financialQuotes = [
   "\"The more you learn, the more you earn.\" – Warren Buffett",
   "\"Rich people acquire assets. The poor acquire liabilities.\" – Robert Kiyosaki",
   "\"A penny saved is a penny earned.\" – Benjamin Franklin",
-  "\"Compound interest is the eighth wonder of the world.\" – Albert Einstein",
+  "\"Every rupee has a job. Give it one.\"",
   "\"Beware of little expenses; a small leak will sink a great ship.\" – Benjamin Franklin",
   "\"It’s not how much you make, but how much you keep.\" – Robert Kiyosaki",
   "\"Charity does not decrease wealth.\" – Prophet Muhammad (ﷺ)",
-  "\"An investment in knowledge pays the best interest.\" – Benjamin Franklin",
+  "\"Small savings today create big opportunities tomorrow.\"",
   "\"Wealth consists not in having great possessions, but in having few wants.\" – Epictetus",
   "\"Do not save what is left after spending; spend what is left after saving.\" – Warren Buffett",
   "\"Every time you borrow money, you're robbing your future self.\" – Nathan W. Morris",
@@ -147,13 +147,16 @@ function App() {
           pb: { xs: 4, md: 8 },
           background: theme.palette.custom.pageBackground || theme.palette.background.default,
           transition: "background 0.3s ease, color 0.3s ease",
+          width: "100%",
+          maxWidth: "100vw",
+          overflowX: "hidden",
         }}
       >
         <Navbar onOpenReports={() => setReportsOpen(true)} />
 
         <Container
           maxWidth="lg"
-          sx={{ mt: { xs: 1.5, md: 4 }, px: { xs: 1, sm: 3 } }}
+          sx={{ mt: { xs: 1.5, md: 3 }, px: { xs: 1.5, sm: 3 } }}
         >
           <Fade in timeout={600}>
             <Box mb={{ xs: 3, md: 5 }} textAlign="center">

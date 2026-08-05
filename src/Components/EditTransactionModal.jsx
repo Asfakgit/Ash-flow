@@ -29,9 +29,22 @@ import {
   getTodayDisplay,
   isValidDate,
 } from "../Services/SheetService";
+import soundEffects from "../Services/soundEffects";
 
 const Transition = forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />;
+  return (
+    <Slide
+      direction="up"
+      ref={ref}
+      {...props}
+      timeout={{ enter: 420, exit: 260 }}
+      style={{
+        transitionTimingFunction: props.in
+          ? "cubic-bezier(0.32, 0.72, 0, 1)"
+          : "cubic-bezier(0.4, 0, 0.22, 1)",
+      }}
+    />
+  );
 });
 
 function EditTransactionModal({
@@ -51,6 +64,20 @@ function EditTransactionModal({
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      const origBodyOverflow = document.body.style.overflow;
+      const origHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = origBodyOverflow;
+        document.documentElement.style.overflow = origHtmlOverflow;
+      };
+    }
+  }, [open]);
 
   const existingPersonNames = useMemo(() => {
     const rows = getDataRows(transactions);
@@ -101,6 +128,7 @@ function EditTransactionModal({
     }
 
     setLoading(true);
+    soundEffects.playEdit();
 
     const payload = {
       id: getRowVal(transaction, 0, "id", Date.now()),
@@ -130,7 +158,7 @@ function EditTransactionModal({
             };
           }
           return row;
-        })
+        }),
       );
     }
 
@@ -157,7 +185,7 @@ function EditTransactionModal({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: { xs: 3, sm: 4 },
+          borderRadius: { xs: 1.5, sm: 2 },
           background: theme.palette.custom.dialogGradient,
           border: "1px solid rgba(148, 163, 184, 0.15)",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.85)",
@@ -183,14 +211,14 @@ function EditTransactionModal({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: { xs: 36, sm: 44 },
-              height: { xs: 36, sm: 44 },
-              borderRadius: "12px",
+              width: { xs: 34, sm: 40 },
+              height: { xs: 34, sm: 40 },
+              borderRadius: "8px",
               background: "rgba(99, 102, 241, 0.15)",
               color: theme.palette.secondary.main,
             }}
           >
-            <EditNoteIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
+            <EditNoteIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           </Box>
           <Box>
             <Typography
@@ -203,7 +231,10 @@ function EditTransactionModal({
             >
               Edit Transaction
             </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+            <Typography
+              variant="caption"
+              sx={{ color: theme.palette.text.secondary }}
+            >
               ID: {getRowVal(transaction, 0, "id", "N/A")}
             </Typography>
           </Box>
@@ -329,7 +360,10 @@ function EditTransactionModal({
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end" sx={{ position: "relative" }}>
-                    <IconButton size="small" sx={{ color: theme.palette.text.secondary }}>
+                    <IconButton
+                      size="small"
+                      sx={{ color: theme.palette.text.secondary }}
+                    >
                       <CalendarMonthIcon />
                     </IconButton>
                     <input

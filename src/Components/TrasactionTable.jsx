@@ -30,6 +30,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import soundEffects from "../Services/soundEffects";
 
 function Transactions({
   transactions,
@@ -82,6 +83,7 @@ function Transactions({
         message: `Are you sure you want to delete the transaction for "${personName}" (₹${amountNum})? This action cannot be undone.`,
         confirmText: "Delete",
         onConfirm: async () => {
+          soundEffects.playDelete();
           if (setTransactions) {
             setTransactions(prev => prev.filter(r => getRowVal(r, 0, "id", null) !== idVal));
           }
@@ -152,14 +154,14 @@ function Transactions({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: { xs: 36, sm: 44 },
-              height: { xs: 36, sm: 44 },
-              borderRadius: "12px",
+              width: { xs: 34, sm: 40 },
+              height: { xs: 34, sm: 40 },
+              borderRadius: "8px",
               background: theme.palette.custom.successBoxBg,
               color: theme.palette.primary.main,
             }}
           >
-            <ReceiptLongIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
+            <ReceiptLongIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           </Box>
           <Box>
             <Typography
@@ -216,8 +218,16 @@ function Transactions({
             backgroundColor: theme.palette.background.paper,
           }}
         >
-          <Box sx={{ overflowX: "auto" }}>
-            <Table size="small">
+          <Box
+            sx={{
+              overflowX: "auto",
+              maxHeight: 480,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
+            }}
+          >
+            <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ py: 1 }}>Person</TableCell>
@@ -426,7 +436,22 @@ function Transactions({
       </Box>
 
       {/* 2. MOBILE VIEW (Native List Cards - Zero Horizontal Scrolling) */}
-      <Box sx={{ display: { xs: "block", md: "none" } }}>
+      <Box
+        sx={{
+          display: { xs: "block", md: "none" },
+          maxHeight: { xs: 400, sm: 480 },
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+          overscrollBehaviorY: "auto",
+          pr: 0.5,
+          "&::-webkit-scrollbar": { width: "4px" },
+          "&::-webkit-scrollbar-thumb": {
+            backgroundColor: theme.palette.custom.scrollbarThumb,
+            borderRadius: "4px",
+          },
+        }}
+      >
         {filteredRows.length === 0 ? (
           <Paper
             elevation={0}
@@ -443,7 +468,7 @@ function Transactions({
             </Typography>
           </Paper>
         ) : (
-          <Stack spacing={1.2}>
+          <Stack spacing={0.75}>
             {filteredRows.map((row, index) => {
               const idVal = getRowVal(row, 0, "id", index);
               const personName = capitalizeName(
@@ -469,11 +494,13 @@ function Transactions({
                   key={idVal || index}
                   elevation={0}
                   sx={{
-                    px: 1.5,
-                    py: 1.25,
-                    borderRadius: 2,
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: { xs: "6px", sm: "8px" },
                     backgroundColor: theme.palette.custom.cardGradient || theme.palette.background.paper,
                     border: `1px solid ${theme.palette.divider}`,
+                    width: "100%",
+                    boxSizing: "border-box",
                     transition: "border-color 0.2s",
                     "&:active": {
                       borderColor: theme.palette.primary.main,
@@ -490,7 +517,7 @@ function Transactions({
                     <Typography
                       variant="subtitle1"
                       fontWeight="700"
-                      sx={{ color: theme.palette.text.primary, fontSize: "0.95rem" }}
+                      sx={{ color: theme.palette.text.primary, fontSize: "0.88rem" }}
                     >
                       {personName}
                     </Typography>
@@ -503,7 +530,7 @@ function Transactions({
                           : isLent
                             ? theme.palette.primary.main
                             : theme.palette.secondary.main,
-                        fontSize: "1rem",
+                        fontSize: "0.92rem",
                       }}
                     >
                       ₹{amountNum.toLocaleString("en-IN")}
@@ -511,7 +538,7 @@ function Transactions({
                   </Box>
 
                   <Divider
-                    sx={{ borderColor: "rgba(148, 163, 184, 0.08)", my: 0.75 }}
+                    sx={{ borderColor: "rgba(148, 163, 184, 0.08)", my: 0.4 }}
                   />
 
                   {/* Middle row: Type chip, Method chip, Date & Actions */}
@@ -600,6 +627,7 @@ function Transactions({
                           backgroundColor: "rgba(99, 102, 241, 0.1)",
                           width: 28,
                           height: 28,
+                          borderRadius: "6px",
                         }}
                       >
                         <EditIcon sx={{ fontSize: 16 }} />
@@ -613,6 +641,7 @@ function Transactions({
                           backgroundColor: "rgba(244, 63, 94, 0.1)",
                           width: 28,
                           height: 28,
+                          borderRadius: "6px",
                         }}
                       >
                         <DeleteIcon sx={{ fontSize: 16 }} />

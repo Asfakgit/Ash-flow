@@ -269,56 +269,31 @@ export const deleteTransaction = async (id) => {
 // =======================
 // DATE HELPERS (DD/MM/YYYY formatting & Local Timezone Support)
 // =======================
-export const getTodayForPicker = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-export const getTodayDisplay = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+const _formatDMY = (d) => {
+  if (!d || isNaN(d.getTime())) return "-";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${day}/${month}/${year}`;
 };
 
+export const getTodayForPicker = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
+export const getTodayDisplay = () => _formatDMY(new Date());
+
 export const formatDateDisplay = (dateStr) => {
   if (!dateStr) return "-";
-
-  // Handle Date objects
-  if (dateStr instanceof Date) {
-    if (isNaN(dateStr.getTime())) return "-";
-    const year = dateStr.getFullYear();
-    const month = String(dateStr.getMonth() + 1).padStart(2, "0");
-    const day = String(dateStr.getDate()).padStart(2, "0");
-    return `${day}/${month}/${year}`;
-  }
+  if (dateStr instanceof Date) return _formatDMY(dateStr);
 
   const rawStr = String(dateStr).trim();
 
-  // Handle numeric timestamps (ms or sec)
-  if (typeof dateStr === "number" || /^\d{10,13}$/.test(rawStr)) {
-    const d = new Date(Number(rawStr));
-    if (!isNaN(d.getTime())) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${day}/${month}/${year}`;
-    }
-  }
-
-  // Handle ISO strings with T or Z
-  if (rawStr.includes("T") || rawStr.includes("Z")) {
-    const d = new Date(rawStr);
-    if (!isNaN(d.getTime())) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${day}/${month}/${year}`;
-    }
+  // Numeric timestamps or ISO strings
+  if (typeof dateStr === "number" || /^\d{10,13}$/.test(rawStr) || rawStr.includes("T") || rawStr.includes("Z")) {
+    const d = new Date(Number(rawStr) || rawStr);
+    if (!isNaN(d.getTime())) return _formatDMY(d);
   }
 
   const str = rawStr.split("T")[0].split(" ")[0];
@@ -336,6 +311,9 @@ export const formatDateDisplay = (dateStr) => {
     const [, day, month, year] = dmyMatch;
     return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
   }
+
+  const d = new Date(rawStr);
+  if (!isNaN(d.getTime())) return _formatDMY(d);
 
   return str;
 };

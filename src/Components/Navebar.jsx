@@ -1,5 +1,17 @@
 import { useState, useContext } from "react";
-import { AppBar, Toolbar, Typography, Box, Container, Button, IconButton, Tooltip, Menu, MenuItem, ListItemIcon } from "@mui/material";
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Box,
+  Container,
+  Button,
+  IconButton,
+  Tooltip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+} from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import PaletteIcon from "@mui/icons-material/Palette";
 import CheckIcon from "@mui/icons-material/Check";
@@ -16,7 +28,7 @@ function Navbar({ onOpenReports }) {
 
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
-  
+
   const handleThemeChange = (themeName) => {
     setTheme(themeName);
     handleMenuClose();
@@ -33,20 +45,33 @@ function Navbar({ onOpenReports }) {
       position="sticky"
       elevation={0}
       sx={{
-        background: theme.palette.mode === "dark" 
-          ? "rgba(18, 18, 20, 0.72)" 
-          : "rgba(255, 255, 255, 0.72)",
+        top: 0,
+        zIndex: 1100,
+        background:
+          theme.palette.mode === "dark"
+            ? "rgba(18, 18, 20, 0.88)"
+            : "rgba(255, 255, 255, 0.88)",
         backdropFilter: "blur(25px) saturate(180%)",
         WebkitBackdropFilter: "blur(25px) saturate(180%)",
         borderBottom: `1px solid ${theme.palette.divider}`,
         transition: "background 0.3s ease",
+        pt: {
+          xs: "max(env(safe-area-inset-top, 0px), 12px)",
+          sm: "max(env(safe-area-inset-top, 0px), 8px)",
+        },
       }}
     >
       <Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 } }}>
-        <Toolbar disableGutters sx={{ minHeight: { xs: 56, md: 72 }, justifyContent: "space-between" }}>
-          <Box 
-            display="flex" 
-            alignItems="center" 
+        <Toolbar
+          disableGutters
+          sx={{
+            minHeight: { xs: 54, md: 68 },
+            justifyContent: "space-between",
+          }}
+        >
+          <Box
+            display="flex"
+            alignItems="center"
             gap={{ xs: 1, sm: 1.5 }}
             onClick={() => setInfoOpen(true)}
             sx={{
@@ -58,7 +83,7 @@ function Navbar({ onOpenReports }) {
               },
               "&:active": {
                 transform: "scale(0.98)",
-              }
+              },
             }}
           >
             <Box
@@ -66,9 +91,9 @@ function Navbar({ onOpenReports }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: { xs: 34, sm: 42 },
-                height: { xs: 34, sm: 42 },
-                borderRadius: "10px",
+                width: { xs: 34, sm: 40 },
+                height: { xs: 34, sm: 40 },
+                borderRadius: "8px",
                 overflow: "hidden",
                 boxShadow: `0 4px 12px ${theme.palette.primary.main}4D`,
                 flexShrink: 0,
@@ -93,7 +118,7 @@ function Navbar({ onOpenReports }) {
                   letterSpacing: "-0.02em",
                   color: theme.palette.text.primary,
                   lineHeight: 1.1,
-                  fontSize: { xs: "1.05rem", sm: "1.25rem" },
+                  fontSize: { xs: "1rem", sm: "1.2rem" },
                 }}
               >
                 ASH FLOW
@@ -121,7 +146,7 @@ function Navbar({ onOpenReports }) {
                 sx={{
                   color: theme.palette.text.secondary,
                   border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: "10px",
+                  borderRadius: "8px",
                   width: 36,
                   height: 36,
                   "&:hover": {
@@ -132,33 +157,42 @@ function Navbar({ onOpenReports }) {
                 <PaletteIcon sx={{ fontSize: 20 }} />
               </IconButton>
             </Tooltip>
-            
+
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
               onClose={handleMenuClose}
-              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              transformOrigin={{ horizontal: "right", vertical: "top" }}
+              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
               PaperProps={{
                 sx: {
                   mt: 1,
-                  borderRadius: 2,
+                  borderRadius: 1.5,
                   boxShadow: theme.palette.custom.paperShadow,
                   background: theme.palette.background.paper,
                   border: `1px solid ${theme.palette.divider}`,
-                }
+                },
               }}
             >
               {themes.map((t) => (
-                <MenuItem 
-                  key={t.key} 
+                <MenuItem
+                  key={t.key}
                   onClick={() => handleThemeChange(t.key)}
                   sx={{ py: 1.5, px: 2 }}
                 >
                   <ListItemIcon sx={{ minWidth: 32 }}>
-                    {activeTheme === t.key ? <CheckIcon fontSize="small" sx={{ color: theme.palette.primary.main }} /> : null}
+                    {activeTheme === t.key ? (
+                      <CheckIcon
+                        fontSize="small"
+                        sx={{ color: theme.palette.primary.main }}
+                      />
+                    ) : null}
                   </ListItemIcon>
-                  <Typography variant="body2" fontWeight={activeTheme === t.key ? 700 : 500} color={theme.palette.text.primary}>
+                  <Typography
+                    variant="body2"
+                    fontWeight={activeTheme === t.key ? 700 : 500}
+                    color={theme.palette.text.primary}
+                  >
                     {t.label}
                   </Typography>
                 </MenuItem>
@@ -177,7 +211,7 @@ function Navbar({ onOpenReports }) {
                   color: theme.palette.primary.main,
                   fontWeight: 700,
                   fontSize: "0.8rem",
-                  borderRadius: "10px",
+                  borderRadius: "8px",
                   px: 2,
                   py: 0.5,
                   background: theme.palette.custom.successBoxBg,
@@ -201,7 +235,7 @@ function Navbar({ onOpenReports }) {
                   background: theme.palette.custom.successBoxBg,
                   color: theme.palette.primary.main,
                   border: `1px solid ${theme.palette.custom.successBoxBorder}`,
-                  borderRadius: "10px",
+                  borderRadius: "8px",
                   width: 36,
                   height: 36,
                   "&:hover": {
