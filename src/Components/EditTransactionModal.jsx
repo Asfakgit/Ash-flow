@@ -323,12 +323,7 @@ function EditTransactionModal({
             >
               <MenuItem value="Lent">Lent (I gave)</MenuItem>
               <MenuItem value="Borrowed">Borrowed (I received)</MenuItem>
-              <MenuItem
-                value="Settled"
-                sx={{ color: theme.palette.error.main, fontWeight: 700 }}
-              >
-                Settled / Close Account
-              </MenuItem>
+              <MenuItem value="Partial Payment">Partial Payment</MenuItem>
             </TextField>
 
             <TextField

@@ -269,6 +269,7 @@ function Transactions({
                       getRowVal(row, 6, "paymentMethod", "Cash"),
                     );
                     const isLent = String(typeVal).toLowerCase() === "lent";
+                    const isPartialPayment = String(typeVal).toLowerCase() === "partial payment";
                     const isSettled = String(typeVal)
                       .toLowerCase()
                       .includes("settled");
@@ -300,9 +301,11 @@ function Transactions({
                             fontSize: "0.95rem",
                             color: isSettled
                               ? theme.palette.error.main
-                              : isLent
-                                ? theme.palette.primary.main
-                                : theme.palette.secondary.main,
+                              : isPartialPayment
+                                ? theme.palette.info.main
+                                : isLent
+                                  ? theme.palette.primary.main
+                                  : theme.palette.secondary.main,
                           }}
                         >
                           ₹{amountNum.toLocaleString("en-IN")}
@@ -318,20 +321,26 @@ function Transactions({
                               borderRadius: "6px",
                               backgroundColor: isSettled
                                 ? theme.palette.custom.errorBoxBg
-                                : isLent
-                                  ? theme.palette.custom.successBoxBg
-                                  : theme.palette.custom.secondaryBoxBg,
+                                : isPartialPayment
+                                  ? "rgba(14, 165, 233, 0.15)"
+                                  : isLent
+                                    ? theme.palette.custom.successBoxBg
+                                    : theme.palette.custom.secondaryBoxBg,
                               color: isSettled
                                 ? theme.palette.error.main
-                                : isLent
-                                  ? theme.palette.primary.main
-                                  : theme.palette.secondary.main,
+                                : isPartialPayment
+                                  ? theme.palette.info.main
+                                  : isLent
+                                    ? theme.palette.primary.main
+                                    : theme.palette.secondary.main,
                               border: `1px solid ${
                                 isSettled
                                   ? theme.palette.custom.errorBoxBorder
-                                  : isLent
-                                    ? theme.palette.custom.successBoxBorder
-                                    : theme.palette.custom.secondaryBoxBorder
+                                  : isPartialPayment
+                                    ? "rgba(14, 165, 233, 0.3)"
+                                    : isLent
+                                      ? theme.palette.custom.successBoxBorder
+                                      : theme.palette.custom.secondaryBoxBorder
                               }`,
                             }}
                           />
@@ -485,6 +494,7 @@ function Transactions({
                 getRowVal(row, 6, "paymentMethod", "Cash"),
               );
               const isLent = String(typeVal).toLowerCase() === "lent";
+              const isPartialPayment = String(typeVal).toLowerCase() === "partial payment";
               const isSettled = String(typeVal)
                 .toLowerCase()
                 .includes("settled");
@@ -527,9 +537,11 @@ function Transactions({
                       sx={{
                         color: isSettled
                           ? theme.palette.error.main
-                          : isLent
-                            ? theme.palette.primary.main
-                            : theme.palette.secondary.main,
+                          : isPartialPayment
+                            ? theme.palette.info.main
+                            : isLent
+                              ? theme.palette.primary.main
+                              : theme.palette.secondary.main,
                         fontSize: "0.92rem",
                       }}
                     >
@@ -563,20 +575,26 @@ function Transactions({
                           borderRadius: "6px",
                           backgroundColor: isSettled
                             ? theme.palette.custom.errorBoxBg
-                            : isLent
-                              ? theme.palette.custom.successBoxBg
-                              : theme.palette.custom.secondaryBoxBg,
+                            : isPartialPayment
+                              ? "rgba(14, 165, 233, 0.15)"
+                              : isLent
+                                ? theme.palette.custom.successBoxBg
+                                : theme.palette.custom.secondaryBoxBg,
                           color: isSettled
                             ? theme.palette.error.main
-                            : isLent
-                              ? theme.palette.primary.main
-                              : theme.palette.secondary.main,
+                            : isPartialPayment
+                              ? theme.palette.info.main
+                              : isLent
+                                ? theme.palette.primary.main
+                                : theme.palette.secondary.main,
                           border: `1px solid ${
                             isSettled
                               ? theme.palette.custom.errorBoxBorder
-                              : isLent
-                                ? theme.palette.custom.successBoxBorder
-                                : theme.palette.custom.secondaryBoxBorder
+                              : isPartialPayment
+                                ? "rgba(14, 165, 233, 0.3)"
+                                : isLent
+                                  ? theme.palette.custom.successBoxBorder
+                                  : theme.palette.custom.secondaryBoxBorder
                           }`,
                         }}
                       />

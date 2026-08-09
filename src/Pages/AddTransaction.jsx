@@ -46,15 +46,12 @@ function AddTransaction({
     return Array.from(new Set(names));
   }, [transactions]);
   const saveData = async () => {
-    if (!person || !type || (type !== "Settled" && !amount)) {
+    if (!person || !type || !amount) {
       if (showNotification) {
         showNotification({
           type: "error",
           title: "Missing Fields",
-          message:
-            type === "Settled"
-              ? "Please provide Person Name and select Settled type."
-              : "Please provide Person Name, Amount, and Transaction Type.",
+          message: "Please provide Person Name, Amount, and Transaction Type.",
         });
       } else {
         alert("Please fill all required fields");
@@ -75,10 +72,9 @@ function AddTransaction({
       return;
     }
     if (
-      type !== "Settled" &&
-      (String(amount).includes("-") ||
-        parseFloat(amount) <= 0 ||
-        isNaN(parseFloat(amount)))
+      String(amount).includes("-") ||
+      parseFloat(amount) <= 0 ||
+      isNaN(parseFloat(amount))
     ) {
       if (showNotification) {
         showNotification({
@@ -107,37 +103,12 @@ function AddTransaction({
       return;
     }
     let finalAmount = parseFloat(amount) || 0;
-    if (type === "Settled" && !finalAmount) {
-      const rows = getDataRows(transactions);
-      let calcBalance = 0;
-      rows.forEach((row) => {
-        const p = getRowVal(row, 1, "person", "");
-        if (
-          String(p).trim().toLowerCase() === String(person).trim().toLowerCase()
-        ) {
-          const amt = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
-          const t = String(getRowVal(row, 3, "type", "")).toLowerCase();
-          if (t === "settled" || t.includes("settled")) calcBalance = 0;
-          else if (t === "lent") calcBalance += amt;
-          else if (t === "borrowed") calcBalance -= amt;
-        }
-      });
-      finalAmount = Math.abs(calcBalance);
-    }
     const data = {
       id: Date.now(),
       person: capitalizeName(person),
       amount: finalAmount,
       type: type || "Lent",
-      notes:
-        notes ||
-        (type === "Settled"
-          ? finalAmount > 0
-            ? `Account settled & closed (₹${finalAmount.toLocaleString(
-                "en-IN",
-              )})`
-            : "Account settled & closed"
-          : ""),
+      notes: notes || "",
       date: formatDateDisplay(date || getTodayDisplay()),
       method: method || "Cash",
     };
@@ -145,7 +116,7 @@ function AddTransaction({
     setLoading(true);
 
     try {
-      if (type === "Settled") {
+      if (type === "Partial Payment") {
         soundEffects.playSettle();
       } else {
         soundEffects.playAdd();
@@ -180,10 +151,10 @@ function AddTransaction({
       if (showNotification) {
         showNotification({
           type: "success",
-          title: type === "Settled" ? "Account Settled & Closed!" : "Saved!",
+          title: type === "Partial Payment" ? "Payment Recorded!" : "Saved!",
           message:
-            type === "Settled"
-              ? `Settlement recorded for "${person}". Account removed from active balances list while preserving transaction history ✅`
+            type === "Partial Payment"
+              ? `Partial payment recorded for "${person}" ✅`
               : "New transaction recorded successfully",
         });
       }
@@ -248,7 +219,7 @@ function AddTransaction({
               fontSize: { xs: "0.75rem", sm: "0.875rem" },
             }}
           >
-            Record new lending, borrowing, or settle an account
+            Record new lending, borrowing, or a partial payment
           </Typography>
         </Box>
       </Box>
@@ -284,7 +255,7 @@ function AddTransaction({
           sx={{ flexDirection: { xs: "column", sm: "row" } }}
         >
           <TextField
-            label={type === "Settled" ? "Amount (Optional)" : "Amount (₹)"}
+            label="Amount (₹)"
             type="number"
             fullWidth
             size="small"
@@ -306,7 +277,7 @@ function AddTransaction({
             }}
             inputProps={{ min: "0", step: "any" }}
             disabled={loading}
-            placeholder={type === "Settled" ? "Not required" : "0.00"}
+            placeholder="0.00"
             variant="outlined"
           />
           <TextField
@@ -321,12 +292,7 @@ function AddTransaction({
           >
             <MenuItem value="Lent">Lent (I gave)</MenuItem>
             <MenuItem value="Borrowed">Borrowed (I received)</MenuItem>
-            <MenuItem
-              value="Settled"
-              sx={{ color: theme.palette.error.main, fontWeight: 700 }}
-            >
-              Settled / Close Account
-            </MenuItem>
+            <MenuItem value="Partial Payment">Partial Payment</MenuItem>
           </TextField>
           <TextField
             select
@@ -402,22 +368,14 @@ function AddTransaction({
               borderRadius: 1.5,
               fontWeight: 700,
               fontSize: "0.92rem",
-              background:
-                type === "Settled"
-                  ? theme.palette.custom.errorGradient
-                  : theme.palette.custom.primaryGradient,
+              background: theme.palette.custom.primaryGradient,
               "&:hover": {
-                background:
-                  type === "Settled"
-                    ? theme.palette.custom.errorHoverGradient
-                    : theme.palette.custom.primaryHoverGradient,
+                background: theme.palette.custom.primaryHoverGradient,
               },
             }}
           >
             {loading ? (
               <CircularProgress size={24} color="inherit" />
-            ) : type === "Settled" ? (
-              "Record Account Settlement"
             ) : (
               "Save Transaction"
             )}

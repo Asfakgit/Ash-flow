@@ -11,6 +11,7 @@ import {
 import { useTheme } from "@mui/material/styles";
 
 import Navbar from "./Components/Navebar";
+import Login from "./Components/Login";
 import AddTransaction from "./Pages/AddTransaction";
 import Transactions from "./Components/TrasactionTable";
 import PersonBalance from "./Components/PersonBalance";
@@ -53,6 +54,15 @@ const financialQuotes = [
 ];
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem("isAuthenticated") === "true";
+  });
+
+  const handleLogin = () => {
+    localStorage.setItem("isAuthenticated", "true");
+    setIsAuthenticated(true);
+  };
+
   const [refresh, setRefresh] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
 
@@ -135,6 +145,15 @@ function App() {
     
     return financialQuotes[dayOfYear % financialQuotes.length];
   }, [todayStr]);
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <CssBaseline />
+        <Login onLogin={handleLogin} />
+      </>
+    );
+  }
 
   return (
     <>

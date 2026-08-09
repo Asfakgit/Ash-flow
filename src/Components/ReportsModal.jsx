@@ -88,16 +88,19 @@ function ReportsModal({ open, onClose, transactions = [] }) {
     topLentPerson,
     topBorrowedPerson,
     personBalances,
+    activePeopleCount,
     totalCount,
     avgTxAmount,
-    settledCount,
+    partialPaymentsCount,
+    totalPartialPayments,
   } = useMemo(() => {
     const rows = getDataRows(transactions);
     const now = new Date();
 
     let totalLent = 0;
     let totalBorrowed = 0;
-    let settledCount = 0;
+    let partialPaymentsCount = 0;
+    let totalPartialPayments = 0;
     let totalTxSum = 0;
     let validTxCount = 0;
     let methods = { Cash: 0, GPay: 0, Bank: 0 };
@@ -113,7 +116,55 @@ function ReportsModal({ open, onClose, transactions = [] }) {
       cutoffDate = new Date(now.getFullYear(), 0, 1);
     }
 
-    // Process rows
+    // Chronologically sort all rows for accurate running balances
+    const sortedRows = [...rows].sort((a, b) => {
+      const idA = Number(getRowVal(a, 0, "id", 0)) || 0;
+      const idB = Number(getRowVal(b, 0, "id", 0)) || 0;
+      return idA - idB;
+    });
+
+    const trueBalanceMap = {};
+    const hasSettledMap = {};
+
+    sortedRows.forEach((row) => {
+      const person = String(getRowVal(row, 1, "person", "")).trim();
+      if (!person) return;
+      const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
+      const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
+
+      if (!trueBalanceMap[person]) {
+        trueBalanceMap[person] = { lent: 0, borrowed: 0, net: 0 };
+      }
+
+      if (type === "settled" || type.includes("settled")) {
+        trueBalanceMap[person].net = 0;
+        hasSettledMap[person] = true;
+      } else if (type === "lent") {
+        trueBalanceMap[person].lent += amount;
+        trueBalanceMap[person].net += amount;
+        hasSettledMap[person] = false;
+      } else if (type === "borrowed") {
+        trueBalanceMap[person].borrowed += amount;
+        trueBalanceMap[person].net -= amount;
+        hasSettledMap[person] = false;
+      } else if (type === "partial payment") {
+        if (trueBalanceMap[person].net > 0) {
+          trueBalanceMap[person].net -= amount;
+        } else if (trueBalanceMap[person].net < 0) {
+          trueBalanceMap[person].net += amount;
+        }
+        hasSettledMap[person] = false;
+      }
+    });
+
+    // Determine currently active people (non-zero balance and not settled)
+    Object.keys(trueBalanceMap).forEach((person) => {
+      if (Math.abs(trueBalanceMap[person].net) < 0.01 || hasSettledMap[person]) {
+        delete trueBalanceMap[person];
+      }
+    });
+
+    // Process rows for period-specific stats
     rows.forEach((row) => {
       const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
       const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
@@ -155,20 +206,21 @@ function ReportsModal({ open, onClose, transactions = [] }) {
 
       if (type === "lent") totalLent += amount;
       if (type === "borrowed") totalBorrowed += amount;
-      if (type === "settled") settledCount++;
+      if (type === "partial payment") {
+        partialPaymentsCount++;
+        totalPartialPayments += amount;
+      }
 
       if (method === "gpay") methods.GPay += amount;
       else if (method === "bank") methods.Bank += amount;
       else methods.Cash += amount;
 
-      // Track person balances
+      // Track person period totals for top lent/borrowed stats
       if (person) {
         if (!personMap[person])
-          personMap[person] = { lent: 0, borrowed: 0, net: 0 };
+          personMap[person] = { lent: 0, borrowed: 0 };
         if (type === "lent") personMap[person].lent += amount;
         if (type === "borrowed") personMap[person].borrowed += amount;
-        personMap[person].net =
-          personMap[person].lent - personMap[person].borrowed;
       }
     });
 
@@ -235,13 +287,17 @@ function ReportsModal({ open, onClose, transactions = [] }) {
     let topBorrowed = { name: "N/A", amount: 0 };
 
     Object.entries(personMap).forEach(([name, p]) => {
-      if (p.lent > topLent.amount) topLent = { name, amount: p.lent };
-      if (p.borrowed > topBorrowed.amount)
-        topBorrowed = { name, amount: p.borrowed };
+      // Only include people whose accounts are currently active (not closed/settled)
+      if (trueBalanceMap[name]) {
+        if (p.lent > topLent.amount) topLent = { name, amount: p.lent };
+        if (p.borrowed > topBorrowed.amount)
+          topBorrowed = { name, amount: p.borrowed };
+      }
     });
 
-    // Top active person balances (sorted by absolute net)
-    const personBalancesList = Object.entries(personMap)
+    // Top active person balances (sorted by absolute net) from TRUE balances
+    const activePeopleCount = Object.keys(trueBalanceMap).length;
+    const personBalancesList = Object.entries(trueBalanceMap)
       .map(([name, val]) => ({ name, ...val }))
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
       .slice(0, 5);
@@ -251,14 +307,16 @@ function ReportsModal({ open, onClose, transactions = [] }) {
     return {
       chartData: data,
       maxVal: max,
-      summary: { totalLent, totalBorrowed },
+      summary: { totalLent, totalBorrowed, totalPartialPayments },
       methodStats: methods,
       topLentPerson: topLent,
       topBorrowedPerson: topBorrowed,
       personBalances: personBalancesList,
+      activePeopleCount,
       totalCount: validTxCount,
       avgTxAmount: avgTx,
-      settledCount,
+      partialPaymentsCount,
+      totalPartialPayments,
     };
   }, [transactions, timeRange]);
 
@@ -660,14 +718,14 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 color="text.secondary"
                 display="block"
               >
-                Settled Accounts
+                Partial Payments
               </Typography>
               <Typography
                 variant="subtitle1"
                 fontWeight="800"
-                color="primary.main"
+                color="info.main"
               >
-                {settledCount} Settled
+                {partialPaymentsCount} (₹{totalPartialPayments.toLocaleString("en-IN")})
               </Typography>
             </Paper>
           </Grid>
@@ -693,7 +751,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 fontWeight="800"
                 color="secondary.main"
               >
-                {personBalances.length} People
+                {activePeopleCount} People
               </Typography>
             </Paper>
           </Grid>

@@ -66,6 +66,13 @@ function PersonBalance({
       } else if (type === "borrowed") {
         balanceMap[person] -= amount;
         hasSettledMap[person] = false;
+      } else if (type === "partial payment") {
+        if (balanceMap[person] > 0) {
+          balanceMap[person] -= amount;
+        } else if (balanceMap[person] < 0) {
+          balanceMap[person] += amount;
+        }
+        hasSettledMap[person] = false;
       }
     });
 
@@ -79,7 +86,7 @@ function PersonBalance({
   }, [transactions]);
 
   const handleSettlePerson = (person, balance) => {
-    const confirmMsg = `Settle account for "${person}"? This will close their account and remove them from the active balances list, while preserving all their transaction records in history.`;
+    const confirmMsg = `Record a full payment to close the account for "${person}"? This will add a Partial Payment transaction for the exact remaining balance, closing their account and removing them from the active balances list.`;
 
     const executeSettle = async () => {
       try {
@@ -91,8 +98,8 @@ function PersonBalance({
           id: Date.now(),
           person: capitalizeName(person),
           amount: settleAmt,
-          type: "Settled",
-          notes: "Payment settled",
+          type: "Partial Payment",
+          notes: "Full payment to close account",
           date: formatDateDisplay(new Date().toISOString().split("T")[0]),
           method: "Cash",
         };
@@ -118,8 +125,8 @@ function PersonBalance({
         if (showNotification) {
           showNotification({
             type: "success",
-            title: "Account Settled & Closed!",
-            message: `Account for "${person}" closed from active balances ✅`,
+            title: "Payment Recorded & Account Closed!",
+            message: `Full payment recorded for "${person}". Account closed from active balances ✅`,
           });
         }
       } catch (err) {
@@ -130,9 +137,9 @@ function PersonBalance({
     if (showNotification) {
       showNotification({
         type: "confirm",
-        title: "Settle & Close Account?",
+        title: "Record Full Payment & Close Account?",
         message: confirmMsg,
-        confirmText: "Settle Account",
+        confirmText: "Record Payment",
         onConfirm: executeSettle,
       });
     } else {
