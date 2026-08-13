@@ -142,37 +142,40 @@ function EditTransactionModal({
       method: method || "Cash",
     };
 
-    // Optimistic Update
-    if (setTransactions) {
-      setTransactions((prev) =>
-        prev.map((row) => {
-          if (String(getRowVal(row, 0, "id", null)) === String(payload.id)) {
-            return {
-              id: payload.id,
-              person: payload.person,
-              amount: payload.amount,
-              type: payload.type,
-              date: payload.date,
-              notes: payload.notes,
-              method: payload.method,
-            };
-          }
-          return row;
-        }),
-      );
-    }
+    try {
+      // Await update to ensure it completes before triggering refresh
+      await updateTransaction(payload);
 
-    // Instantly close modal and show success
-    setLoading(false);
-    onClose();
-    if (onSuccess) onSuccess();
+      // Optimistic Update
+      if (setTransactions) {
+        setTransactions((prev) =>
+          prev.map((row) => {
+            if (String(getRowVal(row, 0, "id", null)) === String(payload.id)) {
+              return {
+                ...row,
+                id: payload.id,
+                person: payload.person,
+                amount: payload.amount,
+                type: payload.type,
+                date: payload.date,
+                notes: payload.notes,
+                method: payload.method,
+              };
+            }
+            return row;
+          }),
+        );
+      }
 
-    // Fire API in background
-    updateTransaction(payload).catch((err) => {
+      // Close modal and show success
+      setLoading(false);
+      onClose();
+      if (onSuccess) onSuccess();
+    } catch (err) {
       console.error("Update failed:", err);
-      // In a real production app, you might want to rollback the optimistic update here
+      setLoading(false);
       if (onError) onError("Failed to update transaction on the server.");
-    });
+    }
   };
 
   return (

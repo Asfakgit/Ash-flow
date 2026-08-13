@@ -158,7 +158,7 @@ export const addTransaction = async (data) => {
     person: data.person,
     amount: data.amount,
     type: data.type,
-    date: data.date,
+    date: formatDateForPicker(data.date), // Format to YYYY-MM-DD for PostgreSQL
     notes: data.notes || "",
     method: data.method || "Cash",
   };
@@ -196,7 +196,7 @@ export const updateTransaction = async (data) => {
     person: data.person,
     amount: data.amount,
     type: data.type,
-    date: data.date,
+    date: formatDateForPicker(data.date), // Format to YYYY-MM-DD for PostgreSQL
     notes: data.notes || "",
     method: data.method || "Cash",
   };

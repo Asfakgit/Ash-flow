@@ -86,7 +86,7 @@ function PersonBalance({
   }, [transactions]);
 
   const handleSettlePerson = (person, balance) => {
-    const confirmMsg = `Record a full payment to close the account for "${person}"? This will add a Partial Payment transaction for the exact remaining balance, closing their account and removing them from the active balances list.`;
+    const confirmMsg = `Record a full payment to close the account for "${person}"? This will add a 'Settled' transaction for the exact remaining balance, closing their account and removing them from the active balances list.`;
 
     const executeSettle = async () => {
       try {
@@ -98,7 +98,7 @@ function PersonBalance({
           id: Date.now(),
           person: capitalizeName(person),
           amount: settleAmt,
-          type: "Partial Payment",
+          type: "Settled",
           notes: "Full payment to close account",
           date: formatDateDisplay(new Date().toISOString().split("T")[0]),
           method: "Cash",

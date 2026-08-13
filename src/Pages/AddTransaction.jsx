@@ -154,7 +154,7 @@ function AddTransaction({
           title: type === "Partial Payment" ? "Payment Recorded!" : "Saved!",
           message:
             type === "Partial Payment"
-              ? `Partial payment recorded for "${person}" ✅`
+              ? `Partial payment recorded for "${person}"`
               : "New transaction recorded successfully",
         });
       }
