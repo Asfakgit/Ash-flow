@@ -159,7 +159,10 @@ function ReportsModal({ open, onClose, transactions = [] }) {
 
     // Determine currently active people (non-zero balance and not settled)
     Object.keys(trueBalanceMap).forEach((person) => {
-      if (Math.abs(trueBalanceMap[person].net) < 0.01 || hasSettledMap[person]) {
+      if (
+        Math.abs(trueBalanceMap[person].net) < 0.01 ||
+        hasSettledMap[person]
+      ) {
         delete trueBalanceMap[person];
       }
     });
@@ -217,8 +220,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
 
       // Track person period totals for top lent/borrowed stats
       if (person) {
-        if (!personMap[person])
-          personMap[person] = { lent: 0, borrowed: 0 };
+        if (!personMap[person]) personMap[person] = { lent: 0, borrowed: 0 };
         if (type === "lent") personMap[person].lent += amount;
         if (type === "borrowed") personMap[person].borrowed += amount;
       }
@@ -296,9 +298,16 @@ function ReportsModal({ open, onClose, transactions = [] }) {
     });
 
     // Top active person balances (sorted by absolute net) from TRUE balances
+    let currentLent = 0;
+    let currentBorrowed = 0;
+
     const activePeopleCount = Object.keys(trueBalanceMap).length;
     const personBalancesList = Object.entries(trueBalanceMap)
-      .map(([name, val]) => ({ name, ...val }))
+      .map(([name, val]) => {
+        if (val.net > 0) currentLent += val.net;
+        if (val.net < 0) currentBorrowed += Math.abs(val.net);
+        return { name, ...val };
+      })
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
       .slice(0, 5);
 
@@ -307,7 +316,13 @@ function ReportsModal({ open, onClose, transactions = [] }) {
     return {
       chartData: data,
       maxVal: max,
-      summary: { totalLent, totalBorrowed, totalPartialPayments },
+      summary: {
+        totalLent,
+        totalBorrowed,
+        totalPartialPayments,
+        currentLent,
+        currentBorrowed,
+      },
       methodStats: methods,
       topLentPerson: topLent,
       topBorrowedPerson: topBorrowed,
@@ -320,7 +335,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
     };
   }, [transactions, timeRange]);
 
-  const netBalance = summary.totalLent - summary.totalBorrowed;
+  const netBalance = summary.currentLent - summary.currentBorrowed;
 
   return (
     <Dialog
@@ -332,7 +347,9 @@ function ReportsModal({ open, onClose, transactions = [] }) {
       PaperProps={{
         sx: {
           borderRadius: 0,
-          background: theme.palette.custom.cardGradient || theme.palette.background.default,
+          background:
+            theme.palette.custom.cardGradient ||
+            theme.palette.background.default,
           border: "none",
           boxShadow: "none",
           overflow: "hidden",
@@ -474,21 +491,38 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             <Paper
               elevation={0}
               sx={{
-                p: 1.75,
-                borderRadius: 1,
-                backgroundColor: theme.palette.custom.successBoxBg,
+                p: 2,
+                borderRadius: 2,
+                background: `linear-gradient(135deg, ${theme.palette.custom.successBoxBg}, rgba(16, 185, 129, 0.05))`,
                 border: "1px solid rgba(16, 185, 129, 0.2)",
+                boxShadow: "0 4px 20px rgba(16, 185, 129, 0.05)",
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
+                position: "relative",
+                overflow: "hidden",
               }}
             >
+              {/* decorative circle */}
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: -20,
+                  right: -20,
+                  width: 80,
+                  height: 80,
+                  borderRadius: "50%",
+                  background: "rgba(16, 185, 129, 0.1)",
+                }}
+              />
+
               <Box
                 display="flex"
                 alignItems="center"
                 justifyContent="space-between"
-                mb={0.5}
+                mb={1.5}
+                position="relative"
               >
                 <Typography
                   variant="caption"
@@ -499,26 +533,87 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                     letterSpacing: "0.05em",
                   }}
                 >
-                  Total Lent
+                  Lent Overview
                 </Typography>
                 <ArrowCircleUpIcon
-                  sx={{ color: theme.palette.primary.main, fontSize: 20 }}
+                  sx={{
+                    color: theme.palette.primary.main,
+                    fontSize: 24,
+                    opacity: 0.8,
+                  }}
                 />
               </Box>
-              <Typography
-                variant="h5"
-                fontWeight="800"
-                sx={{ color: theme.palette.primary.main, my: 0.5 }}
+
+              <Box
+                display="flex"
+                flexDirection="column"
+                gap={0.5}
+                position="relative"
               >
-                ₹{summary.totalLent.toLocaleString("en-IN")}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: theme.palette.text.secondary, fontSize: "0.7rem" }}
-              >
-                Top Lent: <strong>{topLentPerson.name}</strong> (₹
-                {topLentPerson.amount.toLocaleString("en-IN")})
-              </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  Outstanding (To Receive)
+                </Typography>
+                <Typography
+                  variant="h4"
+                  fontWeight="800"
+                  sx={{
+                    color: theme.palette.primary.main,
+                    mb: 1,
+                    textShadow: "0 2px 10px rgba(16,185,129,0.2)",
+                  }}
+                >
+                  ₹{summary.currentLent.toLocaleString("en-IN")}
+                </Typography>
+
+                <Box
+                  display="flex"
+                  flexDirection="column"
+                  gap={0.5}
+                  sx={{
+                    mt: 1,
+                    pt: 1.5,
+                    borderTop: "1px dashed rgba(16, 185, 129, 0.2)",
+                  }}
+                >
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography
+                      variant="caption"
+                      sx={{ color: theme.palette.text.secondary }}
+                    >
+                      Total Volume
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      fontWeight="700"
+                      sx={{ color: theme.palette.text.primary }}
+                    >
+                      ₹{summary.totalLent.toLocaleString("en-IN")}
+                    </Typography>
+                  </Box>
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography
+                      variant="caption"
+                      sx={{ color: theme.palette.text.secondary }}
+                    >
+                      Top: {topLentPerson.name}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      fontWeight="700"
+                      sx={{ color: theme.palette.text.primary }}
+                    >
+                      ₹{topLentPerson.amount.toLocaleString("en-IN")}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
             </Paper>
           </Grid>
 
@@ -526,21 +621,37 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             <Paper
               elevation={0}
               sx={{
-                p: 1.75,
-                borderRadius: 1,
-                backgroundColor: theme.palette.custom.secondaryBoxBg,
+                p: 2,
+                borderRadius: 2,
+                background: `linear-gradient(135deg, ${theme.palette.custom.secondaryBoxBg}, rgba(99, 102, 241, 0.05))`,
                 border: "1px solid rgba(99, 102, 241, 0.2)",
+                boxShadow: "0 4px 20px rgba(99, 102, 241, 0.05)",
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
+                position: "relative",
+                overflow: "hidden",
               }}
             >
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: -20,
+                  right: -20,
+                  width: 80,
+                  height: 80,
+                  borderRadius: "50%",
+                  background: "rgba(99, 102, 241, 0.1)",
+                }}
+              />
+
               <Box
                 display="flex"
                 alignItems="center"
                 justifyContent="space-between"
-                mb={0.5}
+                mb={1.5}
+                position="relative"
               >
                 <Typography
                   variant="caption"
@@ -551,26 +662,87 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                     letterSpacing: "0.05em",
                   }}
                 >
-                  Total Borrowed
+                  Borrowed Overview
                 </Typography>
                 <ArrowCircleDownIcon
-                  sx={{ color: theme.palette.secondary.main, fontSize: 20 }}
+                  sx={{
+                    color: theme.palette.secondary.main,
+                    fontSize: 24,
+                    opacity: 0.8,
+                  }}
                 />
               </Box>
-              <Typography
-                variant="h5"
-                fontWeight="800"
-                sx={{ color: theme.palette.secondary.main, my: 0.5 }}
+
+              <Box
+                display="flex"
+                flexDirection="column"
+                gap={0.5}
+                position="relative"
               >
-                ₹{summary.totalBorrowed.toLocaleString("en-IN")}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: theme.palette.text.secondary, fontSize: "0.7rem" }}
-              >
-                Top Borrowed: <strong>{topBorrowedPerson.name}</strong> (₹
-                {topBorrowedPerson.amount.toLocaleString("en-IN")})
-              </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  Outstanding (To Pay)
+                </Typography>
+                <Typography
+                  variant="h4"
+                  fontWeight="800"
+                  sx={{
+                    color: theme.palette.secondary.main,
+                    mb: 1,
+                    textShadow: "0 2px 10px rgba(99,102,241,0.2)",
+                  }}
+                >
+                  ₹{summary.currentBorrowed.toLocaleString("en-IN")}
+                </Typography>
+
+                <Box
+                  display="flex"
+                  flexDirection="column"
+                  gap={0.5}
+                  sx={{
+                    mt: 1,
+                    pt: 1.5,
+                    borderTop: "1px dashed rgba(99, 102, 241, 0.2)",
+                  }}
+                >
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography
+                      variant="caption"
+                      sx={{ color: theme.palette.text.secondary }}
+                    >
+                      Total Volume
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      fontWeight="700"
+                      sx={{ color: theme.palette.text.primary }}
+                    >
+                      ₹{summary.totalBorrowed.toLocaleString("en-IN")}
+                    </Typography>
+                  </Box>
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography
+                      variant="caption"
+                      sx={{ color: theme.palette.text.secondary }}
+                    >
+                      Top: {topBorrowedPerson.name}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      fontWeight="700"
+                      sx={{ color: theme.palette.text.primary }}
+                    >
+                      ₹{topBorrowedPerson.amount.toLocaleString("en-IN")}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
             </Paper>
           </Grid>
 
@@ -578,27 +750,49 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             <Paper
               elevation={0}
               sx={{
-                p: 1.75,
-                borderRadius: 1,
-                backgroundColor:
+                p: 2,
+                borderRadius: 2,
+                background:
                   netBalance >= 0
-                    ? theme.palette.custom.netPositiveBoxBg
-                    : theme.palette.custom.errorBoxBg,
+                    ? `linear-gradient(135deg, ${theme.palette.custom.netPositiveBoxBg}, rgba(168, 85, 247, 0.05))`
+                    : `linear-gradient(135deg, ${theme.palette.custom.errorBoxBg}, rgba(244, 63, 94, 0.05))`,
                 border:
                   netBalance >= 0
                     ? "1px solid rgba(168, 85, 247, 0.2)"
                     : "1px solid rgba(244, 63, 94, 0.2)",
+                boxShadow:
+                  netBalance >= 0
+                    ? "0 4px 20px rgba(168, 85, 247, 0.05)"
+                    : "0 4px 20px rgba(244, 63, 94, 0.05)",
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
+                position: "relative",
+                overflow: "hidden",
               }}
             >
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: -20,
+                  right: -20,
+                  width: 80,
+                  height: 80,
+                  borderRadius: "50%",
+                  background:
+                    netBalance >= 0
+                      ? "rgba(168, 85, 247, 0.1)"
+                      : "rgba(244, 63, 94, 0.1)",
+                }}
+              />
+
               <Box
                 display="flex"
                 alignItems="center"
                 justifyContent="space-between"
-                mb={0.5}
+                mb={1.5}
+                position="relative"
               >
                 <Typography
                   variant="caption"
@@ -620,31 +814,78 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                       netBalance >= 0
                         ? theme.palette.custom.netPositiveColor
                         : theme.palette.error.main,
-                    fontSize: 20,
+                    fontSize: 24,
+                    opacity: 0.8,
                   }}
                 />
               </Box>
-              <Typography
-                variant="h5"
-                fontWeight="800"
-                sx={{
-                  color:
-                    netBalance >= 0
-                      ? theme.palette.custom.netPositiveColor
-                      : theme.palette.error.main,
-                  my: 0.5,
-                }}
+
+              <Box
+                display="flex"
+                flexDirection="column"
+                gap={0.5}
+                position="relative"
               >
-                ₹{netBalance.toLocaleString("en-IN")}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: theme.palette.text.secondary, fontSize: "0.7rem" }}
-              >
-                {netBalance >= 0
-                  ? "Net Positive position"
-                  : "Net Borrowed position"}
-              </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  Current Net Position
+                </Typography>
+                <Typography
+                  variant="h4"
+                  fontWeight="800"
+                  sx={{
+                    color:
+                      netBalance >= 0
+                        ? theme.palette.custom.netPositiveColor
+                        : theme.palette.error.main,
+                    mb: 1,
+                    textShadow:
+                      netBalance >= 0
+                        ? "0 2px 10px rgba(168,85,247,0.2)"
+                        : "0 2px 10px rgba(244,63,94,0.2)",
+                  }}
+                >
+                  ₹{Math.abs(netBalance).toLocaleString("en-IN")}
+                </Typography>
+
+                <Box
+                  display="flex"
+                  flexDirection="column"
+                  gap={0.5}
+                  sx={{
+                    mt: 1,
+                    pt: 1.5,
+                    borderTop:
+                      netBalance >= 0
+                        ? "1px dashed rgba(168, 85, 247, 0.2)"
+                        : "1px dashed rgba(244, 63, 94, 0.2)",
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ color: theme.palette.text.secondary }}
+                  >
+                    {netBalance > 0
+                      ? "You are currently in surplus."
+                      : netBalance < 0
+                      ? "You currently owe more than lent."
+                      : "All settled up."}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    fontWeight="700"
+                    sx={{ color: theme.palette.text.primary }}
+                  >
+                    Status: {netBalance >= 0 ? "Net Positive" : "Net Negative"}
+                  </Typography>
+                </Box>
+              </Box>
             </Paper>
           </Grid>
         </Grid>
@@ -725,7 +966,8 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 fontWeight="800"
                 color="info.main"
               >
-                {partialPaymentsCount} (₹{totalPartialPayments.toLocaleString("en-IN")})
+                {partialPaymentsCount} (₹
+                {totalPartialPayments.toLocaleString("en-IN")})
               </Typography>
             </Paper>
           </Grid>
