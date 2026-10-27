@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const SHEETS_API_URL =
-    "https://script.google.com/macros/s/AKfycbymgDOogJPt3DQsVqB0YVFXvqYqPIsBLjOV_AAGgNDc51HCKh7Vct2UaZLcMOrO4RC_/exec";
+  "https://script.google.com/macros/s/AKfycbyHl5Y5loM1AzDzEkeqdlpEpqcZQij9XE5kyAdebDYHQJrywQ_iqK7DptsbbNaP-i37/exec";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -19,6 +19,11 @@ const postRequest = (payload) =>
   axios.post(SHEETS_API_URL, JSON.stringify(payload), {
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     transformResponse: (raw) => normalizeResponseData(raw),
+  }).then((response) => {
+    if (response.data?.success === false) {
+      throw new Error(response.data.message || "Google Sheets request failed");
+    }
+    return response;
   });
 
 // =======================
@@ -144,7 +149,11 @@ export const getTransactions = async () => {
       transformResponse: (raw) => normalizeResponseData(raw),
     });
 
-    const list = Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) {
+      throw new Error(data?.message || "Unexpected response from Google Sheets");
+    }
+
+    const list = data;
     setCachedTransactions(list);
     return { data: list };
   } catch (err) {
