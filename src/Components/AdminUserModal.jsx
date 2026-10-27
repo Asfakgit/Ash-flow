@@ -30,7 +30,12 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
-import { adminGetUsers, adminUpdateUserStatus } from '../Services/SheetService';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import {
+  adminGetUsers,
+  adminUpdateUserStatus,
+  adminDeleteUser,
+} from '../Services/SheetService';
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -185,6 +190,40 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
       title,
       message,
       action: () => handleStatusChange(targetUsername, newStatus),
+    });
+  };
+
+  const handleDeleteUser = async (targetUsername) => {
+    setActionLoading(true);
+    setFeedback({ type: '', message: '' });
+    try {
+      const res = await adminDeleteUser(targetUsername);
+      if (res.success) {
+        setFeedback({
+          type: 'success',
+          message:
+            res.message || `User @${targetUsername} deleted successfully.`,
+        });
+        await loadUsers();
+      }
+    } catch (err) {
+      console.error('Delete user error:', err);
+      setFeedback({
+        type: 'error',
+        message: err.message || `Failed to delete @${targetUsername}`,
+      });
+    } finally {
+      setActionLoading(false);
+      setConfirmDialog({ open: false, title: '', message: '', action: null });
+    }
+  };
+
+  const promptDeleteUser = (targetUsername) => {
+    setConfirmDialog({
+      open: true,
+      title: `Delete @${targetUsername}?`,
+      message: `Are you sure you want to permanently delete user @${targetUsername} and their personal Google Sheet tab? All their records will be removed.`,
+      action: () => handleDeleteUser(targetUsername),
     });
   };
 
@@ -791,6 +830,26 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
                           >
                             Re-enable Access
                           </Button>
+                        )}
+
+                        {!isCurrentAdmin && (
+                          <Tooltip title="Delete user and tab permanently">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              disabled={actionLoading}
+                              onClick={() => promptDeleteUser(u.username)}
+                              sx={{
+                                borderRadius: 1.5,
+                                border: `1px solid ${theme.palette.error.main}33`,
+                                '&:hover': {
+                                  background: theme.palette.error.main + '22',
+                                },
+                              }}
+                            >
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         )}
                       </Box>
                     </Box>

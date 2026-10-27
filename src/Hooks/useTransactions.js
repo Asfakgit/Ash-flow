@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTransactions } from "../Services/SheetService";
+import { getTransactions, getDataRows } from "../Services/SheetService";
 
 function useTransactions(refresh) {
   const [transactions, setTransactions] = useState([]);
@@ -13,7 +13,7 @@ function useTransactions(refresh) {
 
         const res = await getTransactions();
 
-        setTransactions(Array.isArray(res.data) ? res.data : []);
+        setTransactions(Array.isArray(res.data) ? getDataRows(res.data) : []);
       } catch (err) {
         console.error(err);
         setError(err);

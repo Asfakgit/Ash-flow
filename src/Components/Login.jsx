@@ -20,6 +20,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import LoginIcon from '@mui/icons-material/Login';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
 import { loginUser, registerUser } from '../Services/SheetService';
 
 const Login = ({ onLogin }) => {
@@ -63,9 +64,13 @@ const Login = ({ onLogin }) => {
       if (res.success) {
         onLogin(res.user, res.token);
       } else {
-        if (res.status === 'PENDING') {
+        if (
+          res.status === 'PENDING' ||
+          (res.message && res.message.toLowerCase().includes('pending'))
+        ) {
           setInfoMessage(
-            res.message || 'Your account is pending admin approval. You cannot log in until approved.'
+            res.message ||
+              'Your account is pending admin approval. You will be able to log in once the administrator approves it.'
           );
         } else if (res.status === 'REJECTED') {
           setError(
@@ -298,8 +303,27 @@ const Login = ({ onLogin }) => {
                   </Alert>
                 )}
                 {infoMessage && (
-                  <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
-                    {infoMessage}
+                  <Alert
+                    severity="warning"
+                    icon={<HowToRegIcon fontSize="inherit" sx={{ mt: 0.2 }} />}
+                    sx={{
+                      mb: 2.5,
+                      borderRadius: 2,
+                      fontWeight: 600,
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      background: 'rgba(245, 158, 11, 0.08)',
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight="800"
+                      sx={{ mb: 0.3, color: '#f59e0b', fontSize: '0.9rem' }}
+                    >
+                      Account Pending Approval
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.84rem', lineHeight: 1.4 }}>
+                      {infoMessage}
+                    </Typography>
                   </Alert>
                 )}
 

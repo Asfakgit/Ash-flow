@@ -103,6 +103,13 @@ function doPost(e) {
       return handleAdminUpdateStatus_(data);
     }
 
+    if (action === "admin_delete_user") {
+      lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      lockAcquired = true;
+      return handleAdminDeleteUser_(data);
+    }
+
     // ==========================================
     // 3. TRANSACTION DATA ACTIONS (add, update, delete)
     // ==========================================
@@ -294,9 +301,19 @@ function sanitizeSheetName_(name) {
 function findUserByUsername_(username) {
   const sheet = getUsersSheet_();
   const rows = sheet.getDataRange().getValues();
-  const norm = String(username || "").trim().toLowerCase();
+  const raw = String(username || "").trim().toLowerCase();
+  const noSpaces = raw.replace(/\s+/g, "");
+
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][1]).toLowerCase() === norm) {
+    const rowUser = String(rows[i][1]).trim().toLowerCase();
+    const rowFullName = String(rows[i][4]).trim().toLowerCase();
+
+    if (
+      rowUser === raw ||
+      rowUser === noSpaces ||
+      rowFullName === raw ||
+      rowFullName.replace(/\s+/g, "") === noSpaces
+    ) {
       return {
         rowIndex: i + 1,
         id: rows[i][0],
@@ -417,16 +434,12 @@ function handleLogin_(data) {
     return json_({ success: false, message: "Invalid username or password." });
   }
 
-  const checkHash = hashPassword_(password, user.salt);
-  if (checkHash !== user.passwordHash) {
-    return json_({ success: false, message: "Invalid username or password." });
-  }
-
+  // 1. Check approval status FIRST before password verification
   if (user.status === "PENDING") {
     return json_({
       success: false,
       status: "PENDING",
-      message: "Your account is pending admin approval.",
+      message: "Your account is pending admin approval. You will be able to log in once the administrator approves your account.",
     });
   }
   if (user.status === "REJECTED") {
@@ -449,6 +462,12 @@ function handleLogin_(data) {
       status: user.status,
       message: "Account status: " + user.status + ". You cannot log in.",
     });
+  }
+
+  // 2. Once account is approved, verify password
+  const checkHash = hashPassword_(password, user.salt);
+  if (checkHash !== user.passwordHash) {
+    return json_({ success: false, message: "Invalid username or password." });
   }
 
   const token = generateRandomString_(48);
@@ -553,10 +572,41 @@ function handleAdminUpdateStatus_(data) {
   }
 }
 
-function json_(value) {
-  return ContentService
-    .createTextOutput(JSON.stringify(value))
-    .setMimeType(ContentService.MimeType.JSON);
+function handleAdminDeleteUser_(data) {
+  const adminUser = findUserByToken_(data.token);
+  if (!adminUser || adminUser.role !== "ADMIN" || adminUser.status !== "APPROVED") {
+    return json_({ success: false, message: "Unauthorized. Admin privileges required." });
+  }
+
+  const targetUsername = String(data.targetUsername || "").trim().toLowerCase();
+  const targetUser = findUserByUsername_(targetUsername);
+
+  if (!targetUser) {
+    return json_({ success: false, message: "Target user not found." });
+  }
+
+  if (targetUser.username === adminUser.username || targetUser.role === "ADMIN") {
+    return json_({ success: false, message: "Cannot delete the admin account." });
+  }
+
+  const ss = getSpreadsheet_();
+
+  // 1. Delete the user's personal Google Sheet tab if it exists
+  if (targetUser.sheetName && targetUser.sheetName !== DEFAULT_TAB) {
+    const userTab = ss.getSheetByName(targetUser.sheetName);
+    if (userTab) {
+      ss.deleteSheet(userTab);
+    }
+  }
+
+  // 2. Delete row from Users sheet
+  const usersSheet = getUsersSheet_();
+  usersSheet.deleteRow(targetUser.rowIndex);
+
+  return json_({
+    success: true,
+    message: "User @" + targetUsername + " and their Google Sheet tab were deleted.",
+  });
 }
 
 function json_(value) {

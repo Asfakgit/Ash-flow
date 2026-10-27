@@ -166,15 +166,32 @@ export const getRowVal = (row, idx, prop, defaultVal = "") => {
 
 export const getDataRows = (transactions = []) => {
   if (!Array.isArray(transactions) || transactions.length === 0) return [];
-  const first = transactions[0];
-  if (Array.isArray(first)) {
-    const firstCol = String(first[0] || "").toLowerCase();
-    const secondCol = String(first[1] || "").toLowerCase();
-    if (firstCol === "id" || secondCol === "person" || firstCol === "person") {
-      return transactions.slice(1);
+  return transactions.filter((row) => {
+    if (!row) return false;
+    if (Array.isArray(row)) {
+      const col0 = String(row[0] || "").toLowerCase().trim();
+      const col1 = String(row[1] || "").toLowerCase().trim();
+      const col2 = String(row[2] || "").toLowerCase().trim();
+      const col3 = String(row[3] || "").toLowerCase().trim();
+      if (
+        col0 === "id" ||
+        col1 === "person" ||
+        col0 === "person" ||
+        col2 === "amount" ||
+        col3 === "type"
+      ) {
+        return false;
+      }
+    } else if (typeof row === "object") {
+      const idStr = String(row.id || "").toLowerCase().trim();
+      const personStr = String(row.person || "").toLowerCase().trim();
+      const typeStr = String(row.type || "").toLowerCase().trim();
+      if (idStr === "id" || personStr === "person" || typeStr === "type") {
+        return false;
+      }
     }
-  }
-  return transactions;
+    return true;
+  });
 };
 
 // =======================
@@ -467,6 +484,39 @@ export const adminUpdateUserStatus = async (targetUsername, newStatus) => {
   }
 };
 
+export const adminDeleteUser = async (targetUsername) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_delete_user",
+        token: token,
+        targetUsername: targetUsername,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      return {
+        success: true,
+        message: result.message,
+      };
+    }
+
+    throw new Error(result?.message || "Failed to delete user");
+  } catch (err) {
+    console.error("adminDeleteUser error:", err);
+    throw err;
+  }
+};
+
 // =======================
 // GET ALL TRANSACTIONS (GOOGLE SHEETS + OFFLINE CACHE)
 // =======================
@@ -497,18 +547,11 @@ export const getTransactions = async () => {
     }
 
     const dataRows = getDataRows(data);
-    const headerRows =
-      dataRows.length < data.length
-        ? data.slice(0, data.length - dataRows.length)
-        : [];
-    const list = [
-      ...headerRows,
-      ...dataRows.sort(
-        (a, b) =>
-          (Number(getRowVal(b, 0, "id", 0)) || 0) -
-          (Number(getRowVal(a, 0, "id", 0)) || 0)
-      ),
-    ];
+    const list = dataRows.sort(
+      (a, b) =>
+        (Number(getRowVal(b, 0, "id", 0)) || 0) -
+        (Number(getRowVal(a, 0, "id", 0)) || 0)
+    );
     setCachedTransactions(list);
     return { data: list };
   } catch (err) {
@@ -532,7 +575,7 @@ export const addTransaction = async (data) => {
     method: data.method || "Cash",
   };
 
-  const currentCache = getCachedTransactions();
+  const currentCache = getDataRows(getCachedTransactions());
   const updatedCache = [
     payload,
     ...currentCache.filter((r) => String(getRowVal(r, 0, "id")) !== String(payload.id)),
@@ -567,7 +610,7 @@ export const updateTransaction = async (data) => {
     method: data.method || "Cash",
   };
 
-  const currentCache = getCachedTransactions();
+  const currentCache = getDataRows(getCachedTransactions());
   const updatedCache = currentCache.map((item) =>
     String(getRowVal(item, 0, "id")) === String(payload.id) ? { ...item, ...payload } : item
   );
@@ -591,7 +634,7 @@ export const updateTransaction = async (data) => {
 // DELETE TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
 export const deleteTransaction = async (id) => {
-  const currentCache = getCachedTransactions();
+  const currentCache = getDataRows(getCachedTransactions());
   const updatedCache = currentCache.filter(
     (item) => String(getRowVal(item, 0, "id")) !== String(id)
   );
