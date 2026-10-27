@@ -75,6 +75,20 @@ function doPost(e) {
       return handleLogin_(data);
     }
 
+    if (action === "logout") {
+      if (data.token) {
+        lock = LockService.getScriptLock();
+        lock.waitLock(10000);
+        lockAcquired = true;
+        const user = findUserByToken_(data.token);
+        if (user) {
+          const sheet = getUsersSheet_();
+          sheet.getRange(user.rowIndex, 9).setValue("");
+        }
+      }
+      return json_({ success: true, message: "Logged out successfully." });
+    }
+
     // ==========================================
     // 2. ADMIN USER MANAGEMENT ACTIONS
     // ==========================================
@@ -336,8 +350,8 @@ function handleRegister_(data) {
   if (!username || username.length < 3) {
     return json_({ success: false, message: "Username must be at least 3 characters." });
   }
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    return json_({ success: false, message: "Username can only contain letters, numbers, and underscores." });
+  if (!/^[a-zA-Z0-9_@.-]+$/.test(username)) {
+    return json_({ success: false, message: "Username can only contain letters, numbers, underscores, dots, hyphens, and @." });
   }
   if (!password || password.length < 6) {
     return json_({ success: false, message: "Password must be at least 6 characters." });

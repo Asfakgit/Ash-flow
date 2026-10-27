@@ -62,18 +62,66 @@ export const setAuthUser = (user) => {
   }
 };
 
+export const isUserAuthenticated = () => {
+  const token = getAuthToken();
+  const user = getAuthUser();
+  const isAuth = localStorage.getItem("isAuthenticated") === "true";
+  return Boolean(token && user && isAuth);
+};
+
 export const clearAuthSession = () => {
   try {
+    // 1. Clear all user session / cache keys from localStorage
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith("money_app_") ||
+          key === "isAuthenticated" ||
+          key.includes("token") ||
+          key.includes("user") ||
+          key.includes("google") ||
+          key.includes("auth"))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+    // Explicitly guarantee primary session keys are deleted
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem("isAuthenticated");
+
+    // 2. Completely wipe sessionStorage
+    sessionStorage.clear();
   } catch (err) {
     console.error("Failed to clear auth session:", err);
   }
 };
 
-export const logoutUser = () => {
+export const logoutUser = async () => {
+  const token = getAuthToken();
   clearAuthSession();
+
+  if (token) {
+    try {
+      await axios
+        .post(
+          SHEETS_API_URL,
+          JSON.stringify({ action: "logout", token }),
+          {
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            transformResponse: (raw) => normalizeResponseData(raw),
+            timeout: 4000,
+          }
+        )
+        .catch(() => {});
+    } catch {
+      // Non-blocking: local session is wiped regardless
+    }
+  }
 };
 
 const postRequest = (payload) => {
@@ -439,6 +487,10 @@ export const getTransactions = async () => {
 
     if (!Array.isArray(data)) {
       if (data && data.success === false) {
+        if (data.error === "UNAUTHORIZED" || data.error === "FORBIDDEN") {
+          clearAuthSession();
+          window.location.reload();
+        }
         throw new Error(data.message || data.error || "Failed to fetch transactions");
       }
       throw new Error(data?.message || "Unexpected response from Google Sheets");

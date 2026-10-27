@@ -103,8 +103,8 @@ const Login = ({ onLogin }) => {
       setError('Username must be at least 3 characters long.');
       return;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
-      setError('Username can only contain letters, numbers, and underscores (_).');
+    if (!/^[a-zA-Z0-9_@.-]+$/.test(cleanUsername)) {
+      setError('Username can only contain letters, numbers, underscores, dots, hyphens, or @ for email.');
       return;
     }
     if (!password || password.length < 6) {
@@ -308,7 +308,7 @@ const Login = ({ onLogin }) => {
                   <form onSubmit={handleLoginSubmit}>
                     <TextField
                       fullWidth
-                      label="Username"
+                      label="Username or Google Email"
                       variant="outlined"
                       size="small"
                       value={username}
@@ -418,18 +418,18 @@ const Login = ({ onLogin }) => {
 
                     <TextField
                       fullWidth
-                      label="Username"
+                      label="Username or Google Email"
                       variant="outlined"
                       size="small"
                       value={username}
                       onChange={(e) => {
-                        setUsername(e.target.value.toLowerCase().replace(/\s+/g, '_'));
+                        setUsername(e.target.value.toLowerCase().trim());
                         setError('');
                       }}
                       disabled={loading}
                       sx={{ mb: 2 }}
-                      placeholder="e.g. johndoe"
-                      helperText="Letters, numbers, and underscores only"
+                      placeholder="e.g. johndoe or user@gmail.com"
+                      helperText="Username or Google account email"
                     />
 
                     <TextField

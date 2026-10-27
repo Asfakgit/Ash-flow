@@ -20,7 +20,13 @@ import ReportsModal from "./Components/ReportsModal";
 import AdminUserModal from "./Components/AdminUserModal";
 
 import useTransactions from "./Hooks/useTransactions";
-import { getAuthUser, logoutUser, adminGetUsers } from "./Services/SheetService";
+import {
+  getAuthUser,
+  logoutUser,
+  adminGetUsers,
+  isUserAuthenticated,
+  clearAuthSession,
+} from "./Services/SheetService";
 
 const financialQuotes = [
   "\"Price is what you pay. Value is what you get.\" – Warren Buffett",
@@ -57,24 +63,15 @@ const financialQuotes = [
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem("isAuthenticated") === "true";
+    return isUserAuthenticated();
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
-    const existing = getAuthUser();
-    if (!existing && localStorage.getItem("isAuthenticated") === "true") {
-      // Safe fallback for active sessions established before migration
-      const defaultUser = {
-        id: 1,
-        username: String(import.meta.env.VITE_APP_USERNAME || "ashflow").trim().toLowerCase(),
-        fullName: "Ashfak (Admin)",
-        role: "ADMIN",
-        status: "APPROVED",
-        sheetName: "transactions",
-      };
-      return defaultUser;
+    if (isUserAuthenticated()) {
+      return getAuthUser();
     }
-    return existing;
+    clearAuthSession();
+    return null;
   });
 
   const [refresh, setRefresh] = useState(false);
@@ -110,10 +107,14 @@ function App() {
       message: "Are you sure you want to sign out of your account?",
       confirmText: "Sign Out",
       cancelText: "Cancel",
-      onConfirm: () => {
-        logoutUser();
+      onConfirm: async () => {
+        await logoutUser();
         setIsAuthenticated(false);
         setCurrentUser(null);
+        setTransactions([]);
+        setPendingUsersCount(0);
+        setReportsOpen(false);
+        setAdminUsersOpen(false);
       },
     });
   };
