@@ -17,8 +17,10 @@ import Transactions from "./Components/TrasactionTable";
 import PersonBalance from "./Components/PersonBalance";
 import CustomDialog from "./Components/CustomDialog";
 import ReportsModal from "./Components/ReportsModal";
+import AdminUserModal from "./Components/AdminUserModal";
 
 import useTransactions from "./Hooks/useTransactions";
+import { getAuthUser, logoutUser, adminGetUsers } from "./Services/SheetService";
 
 const financialQuotes = [
   "\"Price is what you pay. Value is what you get.\" – Warren Buffett",
@@ -58,13 +60,27 @@ function App() {
     return localStorage.getItem("isAuthenticated") === "true";
   });
 
-  const handleLogin = () => {
-    localStorage.setItem("isAuthenticated", "true");
-    setIsAuthenticated(true);
-  };
+  const [currentUser, setCurrentUser] = useState(() => {
+    const existing = getAuthUser();
+    if (!existing && localStorage.getItem("isAuthenticated") === "true") {
+      // Safe fallback for active sessions established before migration
+      const defaultUser = {
+        id: 1,
+        username: String(import.meta.env.VITE_APP_USERNAME || "ashflow").trim().toLowerCase(),
+        fullName: "Ashfak (Admin)",
+        role: "ADMIN",
+        status: "APPROVED",
+        sheetName: "transactions",
+      };
+      return defaultUser;
+    }
+    return existing;
+  });
 
   const [refresh, setRefresh] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [adminUsersOpen, setAdminUsersOpen] = useState(false);
+  const [pendingUsersCount, setPendingUsersCount] = useState(0);
 
   const [notification, setNotification] = useState({
     open: false,
@@ -79,6 +95,42 @@ function App() {
   const triggerRefresh = () => {
     setRefresh((prev) => !prev);
   };
+
+  const handleLogin = (user) => {
+    localStorage.setItem("isAuthenticated", "true");
+    setIsAuthenticated(true);
+    setCurrentUser(user || getAuthUser());
+    triggerRefresh();
+  };
+
+  const handleLogout = () => {
+    showNotification({
+      type: "warning",
+      title: "Sign Out",
+      message: "Are you sure you want to sign out of your account?",
+      confirmText: "Sign Out",
+      cancelText: "Cancel",
+      onConfirm: () => {
+        logoutUser();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      },
+    });
+  };
+
+  // Poll or check pending users count when admin is logged in
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === "ADMIN") {
+      adminGetUsers()
+        .then((res) => {
+          if (res.success && Array.isArray(res.users)) {
+            const pending = res.users.filter((u) => u.status === "PENDING").length;
+            setPendingUsersCount(pending);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated, currentUser, refresh]);
 
   const theme = useTheme();
 
@@ -171,7 +223,13 @@ function App() {
           overflowX: "clip",
         }}
       >
-        <Navbar onOpenReports={() => setReportsOpen(true)} />
+        <Navbar
+          onOpenReports={() => setReportsOpen(true)}
+          currentUser={currentUser}
+          pendingUsersCount={pendingUsersCount}
+          onOpenAdminUsers={() => setAdminUsersOpen(true)}
+          onLogout={handleLogout}
+        />
 
         <Container
           maxWidth="lg"
@@ -216,13 +274,12 @@ function App() {
             mb={{ xs: 3, md: 5 }}
             alignItems="start"
           >
-          
             <AddTransaction
               transactions={transactions}
               setTransactions={setTransactions}
               showNotification={showNotification}
             />
-              <PersonBalance
+            <PersonBalance
               transactions={transactions}
               setTransactions={setTransactions}
               triggerRefresh={triggerRefresh}
@@ -258,6 +315,19 @@ function App() {
           onClose={() => setReportsOpen(false)}
           transactions={transactions}
         />
+
+        {/* Admin User Management & Approvals Modal */}
+        {currentUser?.role === "ADMIN" && (
+          <AdminUserModal
+            open={adminUsersOpen}
+            onClose={() => setAdminUsersOpen(false)}
+            currentUser={currentUser}
+            onUsersUpdated={(users) => {
+              const pending = users.filter((u) => u.status === "PENDING").length;
+              setPendingUsersCount(pending);
+            }}
+          />
+        )}
       </Box>
     </>
   );
