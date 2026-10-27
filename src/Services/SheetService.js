@@ -153,7 +153,17 @@ export const getTransactions = async () => {
       throw new Error(data?.message || "Unexpected response from Google Sheets");
     }
 
-    const list = data;
+    const dataRows = getDataRows(data);
+    const headerRows = dataRows.length < data.length
+      ? data.slice(0, data.length - dataRows.length)
+      : [];
+    const list = [
+      ...headerRows,
+      ...dataRows.sort((a, b) =>
+        (Number(getRowVal(b, 0, "id", 0)) || 0) -
+        (Number(getRowVal(a, 0, "id", 0)) || 0)
+      ),
+    ];
     setCachedTransactions(list);
     return { data: list };
   } catch (err) {
