@@ -1,7 +1,25 @@
-import { supabase } from "../lib/supabase";
+import axios from "axios";
 
 export const SHEETS_API_URL =
     "https://script.google.com/macros/s/AKfycbymgDOogJPt3DQsVqB0YVFXvqYqPIsBLjOV_AAGgNDc51HCKh7Vct2UaZLcMOrO4RC_/exec";
+
+const normalizeResponseData = (data) => {
+  if (typeof data === "string") {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return data;
+    }
+  }
+
+  return data;
+};
+
+const postRequest = (payload) =>
+  axios.post(SHEETS_API_URL, JSON.stringify(payload), {
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    transformResponse: (raw) => normalizeResponseData(raw),
+  });
 
 // =======================
 // DATA HELPERS (Array & Object Support)
@@ -58,7 +76,7 @@ export const getOfflineQueue = () => {
   try {
     const raw = localStorage.getItem(QUEUE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch (err) {
+  } catch {
     return [];
   }
 };
@@ -85,27 +103,17 @@ export const syncOfflineQueue = async () => {
   if (!queue || queue.length === 0) return;
 
   isSyncing = true;
-  console.log(`📡 Online detected: Syncing ${queue.length} offline actions to Supabase...`);
+  console.log(`Online detected: Syncing ${queue.length} offline actions to Google Sheets...`);
 
   const remainingQueue = [];
   for (const item of queue) {
     try {
       if (item.action === "add") {
-        await supabase.from("transactions").insert([item.payload]);
+        await postRequest({ action: "add", ...item.payload });
       } else if (item.action === "update") {
-        await supabase
-          .from("transactions")
-          .update({
-            person: item.payload.person,
-            amount: item.payload.amount,
-            type: item.payload.type,
-            date: item.payload.date,
-            notes: item.payload.notes,
-            method: item.payload.method,
-          })
-          .eq("id", item.payload.id);
+        await postRequest({ action: "update", ...item.payload });
       } else if (item.action === "delete") {
-        await supabase.from("transactions").delete().eq("id", item.id);
+        await postRequest({ action: "delete", id: item.id });
       }
     } catch (err) {
       console.error("Sync item failed:", item, err);
@@ -124,7 +132,7 @@ if (typeof window !== "undefined") {
 }
 
 // =======================
-// GET ALL TRANSACTIONS (SUPABASE + OFFLINE CACHE)
+// GET ALL TRANSACTIONS (GOOGLE SHEETS + OFFLINE CACHE)
 // =======================
 export const getTransactions = async () => {
   if (typeof navigator !== "undefined" && navigator.onLine) {
@@ -132,14 +140,11 @@ export const getTransactions = async () => {
   }
 
   try {
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("*")
-      .order("id", { ascending: false });
+    const { data } = await axios.get(SHEETS_API_URL, {
+      transformResponse: (raw) => normalizeResponseData(raw),
+    });
 
-    if (error) throw error;
-
-    const list = data || [];
+    const list = Array.isArray(data) ? data : [];
     setCachedTransactions(list);
     return { data: list };
   } catch (err) {
@@ -150,7 +155,7 @@ export const getTransactions = async () => {
 };
 
 // =======================
-// ADD TRANSACTION (SUPABASE + OFFLINE QUEUE)
+// ADD TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
 export const addTransaction = async (data) => {
   const payload = {
@@ -158,7 +163,7 @@ export const addTransaction = async (data) => {
     person: data.person,
     amount: data.amount,
     type: data.type,
-    date: formatDateForPicker(data.date), // Format to YYYY-MM-DD for PostgreSQL
+    date: formatDateDisplay(data.date),
     notes: data.notes || "",
     method: data.method || "Cash",
   };
@@ -173,13 +178,7 @@ export const addTransaction = async (data) => {
   }
 
   try {
-    const { data: resData, error } = await supabase
-      .from("transactions")
-      .insert([payload])
-      .select();
-
-    if (error) throw error;
-    return { status: "success", data: resData };
+    return await postRequest({ action: "add", ...payload });
   } catch (err) {
     console.warn("Insert request failed, saved to offline queue:", err);
     addToOfflineQueue({ action: "add", payload });
@@ -188,7 +187,7 @@ export const addTransaction = async (data) => {
 };
 
 // =======================
-// UPDATE TRANSACTION (SUPABASE + OFFLINE QUEUE)
+// UPDATE TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
 export const updateTransaction = async (data) => {
   const payload = {
@@ -196,7 +195,7 @@ export const updateTransaction = async (data) => {
     person: data.person,
     amount: data.amount,
     type: data.type,
-    date: formatDateForPicker(data.date), // Format to YYYY-MM-DD for PostgreSQL
+    date: formatDateDisplay(data.date),
     notes: data.notes || "",
     method: data.method || "Cash",
   };
@@ -213,21 +212,7 @@ export const updateTransaction = async (data) => {
   }
 
   try {
-    const { data: resData, error } = await supabase
-      .from("transactions")
-      .update({
-        person: payload.person,
-        amount: payload.amount,
-        type: payload.type,
-        date: payload.date,
-        notes: payload.notes,
-        method: payload.method,
-      })
-      .eq("id", payload.id)
-      .select();
-
-    if (error) throw error;
-    return { status: "success", data: resData };
+    return await postRequest({ action: "update", ...payload });
   } catch (err) {
     console.warn("Update request failed, saved to offline queue:", err);
     addToOfflineQueue({ action: "update", payload });
@@ -236,7 +221,7 @@ export const updateTransaction = async (data) => {
 };
 
 // =======================
-// DELETE TRANSACTION (SUPABASE + OFFLINE QUEUE)
+// DELETE TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
 export const deleteTransaction = async (id) => {
   const currentCache = getCachedTransactions();
@@ -251,14 +236,7 @@ export const deleteTransaction = async (id) => {
   }
 
   try {
-    const { data: resData, error } = await supabase
-      .from("transactions")
-      .delete()
-      .eq("id", id)
-      .select();
-
-    if (error) throw error;
-    return { status: "success", data: resData };
+    return await postRequest({ action: "delete", id });
   } catch (err) {
     console.warn("Delete request failed, saved to offline queue:", err);
     addToOfflineQueue({ action: "delete", id });

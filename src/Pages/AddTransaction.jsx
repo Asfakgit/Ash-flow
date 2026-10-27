@@ -143,7 +143,7 @@ function AddTransaction({
           showNotification({
             type: "error",
             title: "Save Failed",
-            message: "Could not sync transaction to Supabase. Please check your Row Level Security (RLS) policies or connection.",
+            message: "Could not sync transaction to Google Sheets. Please check your connection and Apps Script deployment.",
           });
         }
       });
