@@ -32,19 +32,92 @@ const Transition = forwardRef(function Transition(props, ref) {
   );
 });
 
+// Utility to resize and compress uploaded images to prevent QuotaExceededError
+const compressImage = (file, maxSize = 256, quality = 0.82) => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) {
+      reject(new Error("Please upload a valid image file."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.onload = (readerEvent) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Failed to load image."));
+      img.onload = () => {
+        try {
+          const width = img.width;
+          const height = img.height;
+
+          // Square center crop calculation
+          const minDim = Math.min(width, height);
+          const startX = (width - minDim) / 2;
+          const startY = (height - minDim) / 2;
+
+          const targetSize = Math.min(maxSize, minDim);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = targetSize;
+          canvas.height = targetSize;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(readerEvent.target.result);
+            return;
+          }
+
+          ctx.drawImage(
+            img,
+            startX,
+            startY,
+            minDim,
+            minDim,
+            0,
+            0,
+            targetSize,
+            targetSize
+          );
+
+          // Convert to lightweight, crisp JPEG data URL (~15-30 KB)
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(compressedDataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = readerEvent.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 function AppInfoModal({ open, onClose }) {
   const theme = useTheme();
   const fileInputRef = useRef(null);
+  const [uploadError, setUploadError] = useState("");
 
   const [avatarImage, setAvatarImage] = useState(() => {
-    return localStorage.getItem("app_avatar_img") || null;
+    try {
+      return localStorage.getItem("app_avatar_img") || null;
+    } catch {
+      return null;
+    }
   });
 
   useEffect(() => {
-    if (avatarImage) {
-      localStorage.setItem("app_avatar_img", avatarImage);
-    } else {
-      localStorage.removeItem("app_avatar_img");
+    try {
+      if (avatarImage) {
+        localStorage.setItem("app_avatar_img", avatarImage);
+      } else {
+        localStorage.removeItem("app_avatar_img");
+      }
+    } catch (err) {
+      console.warn("Storage quota exceeded or storage unavailable:", err);
+      try {
+        localStorage.removeItem("app_avatar_img");
+      } catch {}
+      setUploadError("Image is too large to save in local storage.");
     }
   }, [avatarImage]);
 
@@ -62,19 +135,25 @@ function AppInfoModal({ open, onClose }) {
     }
   }, [open]);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarImage(reader.result);
-      };
-      reader.readAsDataURL(file);
+      setUploadError("");
+      try {
+        const compressed = await compressImage(file, 256, 0.82);
+        setAvatarImage(compressed);
+      } catch (err) {
+        console.error("Avatar compression error:", err);
+        setUploadError(err.message || "Failed to process image.");
+      } finally {
+        if (e.target) e.target.value = "";
+      }
     }
   };
 
   const handleRemoveImage = (e) => {
     e.stopPropagation();
+    setUploadError("");
     setAvatarImage(null);
   };
 
@@ -241,6 +320,20 @@ function AppInfoModal({ open, onClose }) {
             </Tooltip>
           )}
         </Box>
+
+        {uploadError && (
+          <Typography
+            variant="caption"
+            sx={{
+              color: theme.palette.error.main,
+              mt: -1,
+              mb: 1.5,
+              fontWeight: 500,
+            }}
+          >
+            {uploadError}
+          </Typography>
+        )}
 
         {/* Title */}
         <Typography
