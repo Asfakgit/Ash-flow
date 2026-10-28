@@ -12,7 +12,7 @@ import { useTheme } from "@mui/material/styles";
 
 import Navbar from "./Components/Navebar";
 import Login from "./Components/Login";
-import AddTransaction from "./Pages/AddTransaction";
+import AddTransactionModal from "./Components/AddTransactionModal";
 import Transactions from "./Components/TrasactionTable";
 import PersonBalance from "./Components/PersonBalance";
 import CustomDialog from "./Components/CustomDialog";
@@ -77,6 +77,8 @@ function App() {
   const [refresh, setRefresh] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [adminUsersOpen, setAdminUsersOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addModalDefaults, setAddModalDefaults] = useState({ person: "", type: "Lent" });
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
 
   const [notification, setNotification] = useState({
@@ -104,12 +106,12 @@ function App() {
       message,
       confirmText,
       cancelText,
-      onConfirm: async () => {
-        if (onConfirm) {
-          await onConfirm();
-        }
-        setNotification((prev) => ({ ...prev, open: false }));
-      },
+      onConfirm: onConfirm
+        ? async () => {
+            setNotification((prev) => ({ ...prev, open: false }));
+            await onConfirm();
+          }
+        : null,
     });
   };
 
@@ -271,24 +273,33 @@ function App() {
             </Box>
           </Fade>
 
-          {/* Two Column Layout for Balance & Add Form on larger screens */}
-          <Box
-            display="grid"
-            gridTemplateColumns={{ xs: "1fr", lg: "1fr 1fr" }}
-            gap={{ xs: 2.5, md: 4 }}
-            mb={{ xs: 3, md: 5 }}
-            alignItems="start"
-          >
-            <AddTransaction
-              transactions={transactions}
-              setTransactions={setTransactions}
-              showNotification={showNotification}
-            />
+          {/* Person Balances - Primary Focus with "+ Add Transaction" Button */}
+          <Box mb={{ xs: 3, md: 4.5 }}>
             <PersonBalance
               transactions={transactions}
               setTransactions={setTransactions}
               triggerRefresh={triggerRefresh}
               showNotification={showNotification}
+              onOpenAdd={(defaults) => {
+                const isEvent = Boolean(
+                  defaults &&
+                    (defaults.nativeEvent ||
+                      defaults.target ||
+                      typeof defaults.preventDefault === "function" ||
+                      defaults.type === "click")
+                );
+                const safeDefaults =
+                  isEvent || !defaults || typeof defaults !== "object"
+                    ? { person: "", type: "Lent" }
+                    : {
+                        person: defaults.person || "",
+                        type: ["Lent", "Borrowed", "Partial Payment"].includes(defaults.type)
+                          ? defaults.type
+                          : "Lent",
+                      };
+                setAddModalDefaults(safeDefaults);
+                setAddModalOpen(true);
+              }}
             />
           </Box>
 
@@ -312,6 +323,17 @@ function App() {
           message={notification.message}
           confirmText={notification.confirmText}
           cancelText={notification.cancelText}
+        />
+
+        {/* Add Transaction Modal */}
+        <AddTransactionModal
+          open={addModalOpen}
+          onClose={() => setAddModalOpen(false)}
+          transactions={transactions}
+          setTransactions={setTransactions}
+          showNotification={showNotification}
+          initialPerson={addModalDefaults.person}
+          initialType={addModalDefaults.type}
         />
 
         {/* Reports & Analytics Modal */}

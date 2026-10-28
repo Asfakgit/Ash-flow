@@ -1,21 +1,18 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@mui/material/styles";
 import {
-  deleteTransaction,
   getRowVal,
   getDataRows,
   formatDateDisplay,
+  cleanNotesDisplay,
   capitalizeName,
 } from "../Services/SheetService";
-import EditTransactionModal from "./EditTransactionModal";
 import {
   Table,
   TableHead,
   TableRow,
   TableCell,
   TableBody,
-  IconButton,
-  Tooltip,
   Box,
   Typography,
   Chip,
@@ -24,117 +21,59 @@ import {
   TextField,
   Stack,
   Divider,
+  Tooltip,
+  IconButton,
 } from "@mui/material";
 
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import soundEffects from "../Services/soundEffects";
 
 function Transactions({
   transactions,
-  setTransactions,
-  triggerRefresh,
-  showNotification,
 }) {
   const theme = useTheme();
-  const [editingRow, setEditingRow] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const desktopScrollRef = useRef(null);
+  const mobileScrollRef = useRef(null);
 
-  const handleEditClick = (row) => {
-    setEditingRow(row);
-  };
-
-  const handleEditClose = () => {
-    setEditingRow(null);
-  };
-
-  const handleEditSuccess = () => {
-    if (triggerRefresh) triggerRefresh();
-    if (showNotification) {
-      showNotification({
-        type: "success",
-        title: "Updated!",
-        message: "Transaction has been updated successfully",
-      });
+  // Automatically reset scroll position when filtering
+  useEffect(() => {
+    if (desktopScrollRef.current) {
+      desktopScrollRef.current.scrollTop = 0;
     }
-  };
-
-  const handleEditError = (errMessage) => {
-    if (showNotification) {
-      showNotification({
-        type: "error",
-        title: "Update Failed",
-        message: errMessage || "Could not update transaction.",
-      });
+    if (mobileScrollRef.current) {
+      mobileScrollRef.current.scrollTop = 0;
     }
-  };
-
-  const handleDeleteClick = (row) => {
-    const personName = getRowVal(row, 1, "person", "Unknown");
-    const amountNum = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
-    const idVal = getRowVal(row, 0, "id", null);
-
-    if (showNotification) {
-      showNotification({
-        type: "confirm",
-        title: "Delete Transaction?",
-        message: `Are you sure you want to delete the transaction for "${personName}" (₹${amountNum})? This action cannot be undone.`,
-        confirmText: "Delete",
-        onConfirm: async () => {
-          soundEffects.playDelete();
-          if (setTransactions) {
-            setTransactions(prev => prev.filter(r => getRowVal(r, 0, "id", null) !== idVal));
-          }
-          
-          // Fire in background
-          deleteTransaction(idVal).catch(error => {
-            console.error("Delete failed:", error);
-            if (triggerRefresh) triggerRefresh();
-            showNotification({
-              type: "error",
-              title: "Error",
-              message: "Failed to delete transaction.",
-            });
-          });
-
-          showNotification({
-            type: "success",
-            title: "Deleted!",
-            message: "Transaction deleted successfully.",
-          });
-        },
-      });
-    } else {
-      const confirmDelete = window.confirm(
-        `Delete transaction for "${personName}"?`,
-      );
-      if (confirmDelete && idVal) {
-        if (setTransactions) {
-          setTransactions(prev => prev.filter(r => getRowVal(r, 0, "id", null) !== idVal));
-        }
-        deleteTransaction(idVal).catch(() => {
-          if (triggerRefresh) triggerRefresh();
-        });
-      }
-    }
-  };
+  }, [searchQuery]);
 
   const rows = getDataRows(transactions);
   const filteredRows = rows.filter((row) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+
     const person = String(getRowVal(row, 1, "person", "")).toLowerCase();
+    const amountNum = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
+    const amountStr = String(amountNum);
+    const amountFormatted = amountNum.toLocaleString("en-IN").toLowerCase();
     const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
+    const rawDate = String(getRowVal(row, 4, "date", "")).toLowerCase();
+    const displayDate = formatDateDisplay(rawDate).toLowerCase();
     const notes = String(getRowVal(row, 5, "notes", "")).toLowerCase();
     const method = String(
       getRowVal(row, 6, "method", getRowVal(row, 6, "paymentMethod", "Cash")),
     ).toLowerCase();
-    const query = searchQuery.toLowerCase();
+
+    const qCleanAmt = q.replace(/[₹,\s]/g, "");
+
     return (
-      person.includes(query) ||
-      type.includes(query) ||
-      notes.includes(query) ||
-      method.includes(query)
+      person.includes(q) ||
+      type.includes(q) ||
+      notes.includes(q) ||
+      method.includes(q) ||
+      rawDate.includes(q) ||
+      displayDate.includes(q) ||
+      (qCleanAmt && (amountStr.includes(qCleanAmt) || amountFormatted.includes(qCleanAmt)))
     );
   });
 
@@ -188,11 +127,11 @@ function Transactions({
 
         <TextField
           size="small"
-          placeholder="Search by name, type, method..."
+          placeholder="Search by name, amount, date, type..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           sx={{
-            width: { xs: "100%", sm: 260 },
+            width: { xs: "100%", sm: 280 },
             "& .MuiOutlinedInput-root": {
               backgroundColor: theme.palette.custom.inputBg,
             },
@@ -203,6 +142,19 @@ function Transactions({
                 <SearchIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
               </InputAdornment>
             ),
+            endAdornment: searchQuery ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setSearchQuery("")}
+                  edge="end"
+                  aria-label="clear search"
+                  sx={{ color: theme.palette.text.secondary, p: 0.5 }}
+                >
+                  <ClearIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
           }}
         />
       </Box>
@@ -219,12 +171,25 @@ function Transactions({
           }}
         >
           <Box
+            ref={desktopScrollRef}
             sx={{
               overflowX: "auto",
               maxHeight: 480,
               overflowY: "auto",
               WebkitOverflowScrolling: "touch",
-              touchAction: "pan-y",
+              scrollbarWidth: "thin",
+              scrollbarColor: `${theme.palette.divider} transparent`,
+              "&::-webkit-scrollbar": {
+                width: "6px",
+                height: "6px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: theme.palette.custom?.scrollbarThumb || theme.palette.divider,
+                borderRadius: "4px",
+              },
+              "&::-webkit-scrollbar-track": {
+                backgroundColor: "transparent",
+              },
             }}
           >
             <Table size="small" stickyHeader>
@@ -236,16 +201,13 @@ function Transactions({
                   <TableCell sx={{ py: 1 }}>Method</TableCell>
                   <TableCell sx={{ py: 1 }}>Date</TableCell>
                   <TableCell sx={{ py: 1 }}>Notes</TableCell>
-                  <TableCell align="center" sx={{ py: 1 }}>
-                    Actions
-                  </TableCell>
                 </TableRow>
               </TableHead>
 
               <TableBody>
                 {filteredRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                       <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
                         No transactions found.
                       </Typography>
@@ -300,12 +262,12 @@ function Transactions({
                             fontWeight: 700,
                             fontSize: "0.95rem",
                             color: isSettled
-                              ? theme.palette.error.main
+                              ? "#94A3B8"
                               : isPartialPayment
-                                ? theme.palette.info.main
+                                ? "#0A84FF"
                                 : isLent
-                                  ? theme.palette.primary.main
-                                  : theme.palette.secondary.main,
+                                  ? "#10B981"
+                                  : "#EF4444",
                           }}
                         >
                           ₹{amountNum.toLocaleString("en-IN")}
@@ -320,27 +282,27 @@ function Transactions({
                               fontSize: "0.7rem",
                               borderRadius: "6px",
                               backgroundColor: isSettled
-                                ? theme.palette.custom.errorBoxBg
+                                ? "rgba(148, 163, 184, 0.14)"
                                 : isPartialPayment
-                                  ? "rgba(14, 165, 233, 0.15)"
+                                  ? "rgba(10, 132, 255, 0.14)"
                                   : isLent
-                                    ? theme.palette.custom.successBoxBg
-                                    : theme.palette.custom.secondaryBoxBg,
+                                    ? "rgba(16, 185, 129, 0.14)"
+                                    : "rgba(239, 68, 68, 0.14)",
                               color: isSettled
-                                ? theme.palette.error.main
+                                ? "#94A3B8"
                                 : isPartialPayment
-                                  ? theme.palette.info.main
+                                  ? "#0A84FF"
                                   : isLent
-                                    ? theme.palette.primary.main
-                                    : theme.palette.secondary.main,
+                                    ? "#10B981"
+                                    : "#EF4444",
                               border: `1px solid ${
                                 isSettled
-                                  ? theme.palette.custom.errorBoxBorder
+                                  ? "rgba(148, 163, 184, 0.3)"
                                   : isPartialPayment
-                                    ? "rgba(14, 165, 233, 0.3)"
+                                    ? "rgba(10, 132, 255, 0.3)"
                                     : isLent
-                                      ? theme.palette.custom.successBoxBorder
-                                      : theme.palette.custom.secondaryBoxBorder
+                                      ? "rgba(16, 185, 129, 0.3)"
+                                      : "rgba(239, 68, 68, 0.3)"
                               }`,
                             }}
                           />
@@ -388,51 +350,61 @@ function Transactions({
                         <TableCell
                           sx={{ py: 0.75, color: theme.palette.text.secondary, maxWidth: 220 }}
                         >
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              fontSize: "0.8rem",
-                            }}
-                          >
-                            {notesVal || "-"}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell align="center" sx={{ py: 0.75 }}>
-                          <Box display="flex" justifyContent="center" gap={0.5}>
-                            <Tooltip title="Edit Transaction">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleEditClick(row)}
-                                sx={{
-                                  color: theme.palette.secondary.main,
-                                  "&:hover": {
-                                    backgroundColor: theme.palette.custom.secondaryBoxBg,
+                          {(() => {
+                            const cleanNote = cleanNotesDisplay(notesVal);
+                            return cleanNote ? (
+                              <Tooltip
+                                title={cleanNote}
+                                arrow
+                                placement="top-start"
+                                enterDelay={150}
+                                componentsProps={{
+                                  tooltip: {
+                                    sx: {
+                                      bgcolor: theme.palette.mode === "dark" ? "#1e293b" : "#0f172a",
+                                      color: "#f8fafc",
+                                      fontSize: "0.78rem",
+                                      p: 1.2,
+                                      borderRadius: "8px",
+                                      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                                      border: `1px solid ${theme.palette.divider}`,
+                                      maxWidth: 340,
+                                      wordBreak: "break-word",
+                                    },
+                                  },
+                                  arrow: {
+                                    sx: {
+                                      color: theme.palette.mode === "dark" ? "#1e293b" : "#0f172a",
+                                    },
                                   },
                                 }}
                               >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-
-                            <Tooltip title="Delete Transaction">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDeleteClick(row)}
-                                sx={{
-                                  color: theme.palette.error.main,
-                                  "&:hover": {
-                                    backgroundColor: theme.palette.custom.errorBoxBg,
-                                  },
-                                }}
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    fontSize: "0.8rem",
+                                    cursor: "pointer",
+                                    "&:hover": {
+                                      color: theme.palette.text.primary,
+                                      textDecoration: "underline dotted",
+                                    },
+                                  }}
+                                >
+                                  {cleanNote}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography
+                                variant="body2"
+                                sx={{ fontSize: "0.8rem", color: theme.palette.text.secondary }}
                               >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
+                                -
+                              </Typography>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     );
@@ -446,17 +418,19 @@ function Transactions({
 
       {/* 2. MOBILE VIEW (Native List Cards - Zero Horizontal Scrolling) */}
       <Box
+        ref={mobileScrollRef}
         sx={{
           display: { xs: "block", md: "none" },
           maxHeight: { xs: 400, sm: 480 },
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
-          touchAction: "pan-y",
-          overscrollBehaviorY: "auto",
+          overscrollBehaviorY: "contain",
           pr: 0.5,
+          scrollbarWidth: "thin",
+          scrollbarColor: `${theme.palette.divider} transparent`,
           "&::-webkit-scrollbar": { width: "4px" },
           "&::-webkit-scrollbar-thumb": {
-            backgroundColor: theme.palette.custom.scrollbarThumb,
+            backgroundColor: theme.palette.custom?.scrollbarThumb || theme.palette.divider,
             borderRadius: "4px",
           },
         }}
@@ -477,7 +451,7 @@ function Transactions({
             </Typography>
           </Paper>
         ) : (
-          <Stack spacing={0.75}>
+          <Stack spacing={0.5}>
             {filteredRows.map((row, index) => {
               const idVal = getRowVal(row, 0, "id", index);
               const personName = capitalizeName(
@@ -504,9 +478,9 @@ function Transactions({
                   key={idVal || index}
                   elevation={0}
                   sx={{
-                    px: 1.25,
-                    py: 0.75,
-                    borderRadius: { xs: "6px", sm: "8px" },
+                    px: 1.2,
+                    py: 0.5,
+                    borderRadius: "7px",
                     backgroundColor: theme.palette.custom.cardGradient || theme.palette.background.paper,
                     border: `1px solid ${theme.palette.divider}`,
                     width: "100%",
@@ -525,24 +499,25 @@ function Transactions({
                     mb={0}
                   >
                     <Typography
-                      variant="subtitle1"
+                      variant="subtitle2"
                       fontWeight="700"
-                      sx={{ color: theme.palette.text.primary, fontSize: "0.88rem" }}
+                      sx={{ color: theme.palette.text.primary, fontSize: "0.85rem", lineHeight: 1.2 }}
                     >
                       {personName}
                     </Typography>
                     <Typography
-                      variant="subtitle1"
+                      variant="subtitle2"
                       fontWeight="800"
                       sx={{
                         color: isSettled
-                          ? theme.palette.error.main
+                          ? "#94A3B8"
                           : isPartialPayment
-                            ? theme.palette.info.main
+                            ? "#0A84FF"
                             : isLent
-                              ? theme.palette.primary.main
-                              : theme.palette.secondary.main,
-                        fontSize: "0.92rem",
+                              ? "#10B981"
+                              : "#EF4444",
+                        fontSize: "0.88rem",
+                        lineHeight: 1.2,
                       }}
                     >
                       ₹{amountNum.toLocaleString("en-IN")}
@@ -550,7 +525,7 @@ function Transactions({
                   </Box>
 
                   <Divider
-                    sx={{ borderColor: "rgba(148, 163, 184, 0.08)", my: 0.4 }}
+                    sx={{ borderColor: "rgba(148, 163, 184, 0.08)", my: 0.25 }}
                   />
 
                   {/* Middle row: Type chip, Method chip, Date & Actions */}
@@ -562,7 +537,7 @@ function Transactions({
                     <Box
                       display="flex"
                       alignItems="center"
-                      gap={0.75}
+                      gap={0.6}
                       flexWrap="wrap"
                     >
                       <Chip
@@ -570,31 +545,31 @@ function Transactions({
                         size="small"
                         sx={{
                           fontWeight: 600,
-                          height: 22,
-                          fontSize: "0.68rem",
-                          borderRadius: "6px",
+                          height: 20,
+                          fontSize: "0.64rem",
+                          borderRadius: "5px",
                           backgroundColor: isSettled
-                            ? theme.palette.custom.errorBoxBg
+                            ? "rgba(148, 163, 184, 0.14)"
                             : isPartialPayment
-                              ? "rgba(14, 165, 233, 0.15)"
+                              ? "rgba(10, 132, 255, 0.14)"
                               : isLent
-                                ? theme.palette.custom.successBoxBg
-                                : theme.palette.custom.secondaryBoxBg,
+                                ? "rgba(16, 185, 129, 0.14)"
+                                : "rgba(239, 68, 68, 0.14)",
                           color: isSettled
-                            ? theme.palette.error.main
+                            ? "#94A3B8"
                             : isPartialPayment
-                              ? theme.palette.info.main
+                              ? "#0A84FF"
                               : isLent
-                                ? theme.palette.primary.main
-                                : theme.palette.secondary.main,
+                                ? "#10B981"
+                                : "#EF4444",
                           border: `1px solid ${
                             isSettled
-                              ? theme.palette.custom.errorBoxBorder
+                              ? "rgba(148, 163, 184, 0.3)"
                               : isPartialPayment
-                                ? "rgba(14, 165, 233, 0.3)"
+                                ? "rgba(10, 132, 255, 0.3)"
                                 : isLent
-                                  ? theme.palette.custom.successBoxBorder
-                                  : theme.palette.custom.secondaryBoxBorder
+                                  ? "rgba(16, 185, 129, 0.3)"
+                                  : "rgba(239, 68, 68, 0.3)"
                           }`,
                         }}
                       />
@@ -603,9 +578,9 @@ function Transactions({
                         size="small"
                         sx={{
                           fontWeight: 600,
-                          height: 22,
-                          fontSize: "0.68rem",
-                          borderRadius: "6px",
+                          height: 20,
+                          fontSize: "0.64rem",
+                          borderRadius: "5px",
                           backgroundColor:
                             String(methodVal).toLowerCase() === "gpay"
                               ? theme.palette.custom.secondaryBoxBg
@@ -629,82 +604,70 @@ function Transactions({
                       />
                       <Typography
                         variant="caption"
-                        sx={{ color: theme.palette.text.secondary, fontSize: "0.72rem" }}
+                        sx={{ color: theme.palette.text.secondary, fontSize: "0.68rem" }}
                       >
                         {formatDateDisplay(dateVal)}
                       </Typography>
                     </Box>
-
-                    {/* Touch-optimized Action Buttons */}
-                    <Box display="flex" gap={0.5}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditClick(row)}
-                        sx={{
-                          color: theme.palette.secondary.main,
-                          backgroundColor: "rgba(99, 102, 241, 0.1)",
-                          width: 28,
-                          height: 28,
-                          borderRadius: "6px",
-                        }}
-                      >
-                        <EditIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteClick(row)}
-                        sx={{
-                          color: theme.palette.error.main,
-                          backgroundColor: "rgba(244, 63, 94, 0.1)",
-                          width: 28,
-                          height: 28,
-                          borderRadius: "6px",
-                        }}
-                      >
-                        <DeleteIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Box>
                   </Box>
 
                   {/* Bottom row: Notes if available */}
-                  {notesVal && (
-                    <Box
-                      mt={0.75}
-                      pt={0.5}
-                      sx={{
-                        borderTop: "1px dashed rgba(148, 163, 184, 0.1)",
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
+                  {(() => {
+                    const cleanNote = cleanNotesDisplay(notesVal);
+                    if (!cleanNote) return null;
+                    return (
+                      <Box
+                        mt={0.75}
+                        pt={0.5}
                         sx={{
-                          color: theme.palette.text.secondary,
-                          fontStyle: "italic",
-                          display: "block",
+                          borderTop: "1px dashed rgba(148, 163, 184, 0.1)",
                         }}
                       >
-                        "{notesVal}"
-                      </Typography>
-                    </Box>
-                  )}
+                        <Tooltip
+                          title={cleanNote}
+                          arrow
+                          enterTouchDelay={50}
+                          placement="top-start"
+                          componentsProps={{
+                            tooltip: {
+                              sx: {
+                                bgcolor: theme.palette.mode === "dark" ? "#1e293b" : "#0f172a",
+                                color: "#f8fafc",
+                                fontSize: "0.75rem",
+                                p: 1.2,
+                                borderRadius: "8px",
+                                maxWidth: 280,
+                                wordBreak: "break-word",
+                                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                                border: `1px solid ${theme.palette.divider}`,
+                              },
+                            },
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: theme.palette.text.secondary,
+                              fontStyle: "italic",
+                              display: "block",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              cursor: "pointer",
+                            }}
+                          >
+                            "{cleanNote}"
+                          </Typography>
+                        </Tooltip>
+                      </Box>
+                    );
+                  })()}
                 </Paper>
               );
             })}
           </Stack>
         )}
       </Box>
-
-      {/* Edit Modal */}
-      <EditTransactionModal
-        open={Boolean(editingRow)}
-        onClose={handleEditClose}
-        transaction={editingRow}
-        onSuccess={handleEditSuccess}
-        onError={handleEditError}
-        transactions={transactions}
-        setTransactions={setTransactions}
-      />
     </Box>
   );
 }

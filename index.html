@@ -8,6 +8,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
     <title>Ash Flow</title>
+    <style>
+      /* Guarantee browser autofill never shows blue background */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover, 
+      input:-webkit-autofill:focus, 
+      input:-webkit-autofill:active,
+      input:-internal-autofill-selected {
+        -webkit-box-shadow: 0 0 0 1000px #18181c inset !important;
+        box-shadow: 0 0 0 1000px #18181c inset !important;
+        -webkit-text-fill-color: #ffffff !important;
+        caret-color: #ffffff !important;
+        transition: background-color 50000s ease-in-out 0s !important;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

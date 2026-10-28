@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
@@ -8,22 +8,16 @@ import {
   Button,
   IconButton,
   Tooltip,
-  Menu,
-  MenuItem,
-  ListItemIcon,
   Badge,
   Chip,
 } from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
-import PaletteIcon from "@mui/icons-material/Palette";
-import CheckIcon from "@mui/icons-material/Check";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
-import LogoutIcon from "@mui/icons-material/Logout";
-import PersonIcon from "@mui/icons-material/Person";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { useTheme } from "@mui/material/styles";
 import logo from "../assets/logo.png";
-import { ThemeContext } from "../ThemeContext";
-import AppInfoModal from "./AppInfoModal";
+import SettingsModal from "./SettingsModal";
+import { getUserAvatar } from "../Services/SheetService";
 
 function Navbar({
   onOpenReports,
@@ -33,23 +27,26 @@ function Navbar({
   onLogout,
 }) {
   const theme = useTheme();
-  const { activeTheme, setTheme } = useContext(ThemeContext);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
-  const handleMenuClose = () => setAnchorEl(null);
+  // Sync profile avatar strictly isolated to current user profile
+  const [profileAvatar, setProfileAvatar] = useState(() => getUserAvatar(currentUser));
 
-  const handleThemeChange = (themeName) => {
-    setTheme(themeName);
-    handleMenuClose();
-  };
+  useEffect(() => {
+    setProfileAvatar(getUserAvatar(currentUser));
+  }, [currentUser]);
 
-  const themes = [
-    { key: "midnightEmerald", label: "Dark (Midnight)" },
-    { key: "oledNeon", label: "OLED (True Black)" },
-    { key: "cleanCorporate", label: "Light (Clean)" },
-  ];
+  useEffect(() => {
+    const handleAvatarUpdate = () => {
+      setProfileAvatar(getUserAvatar(currentUser));
+    };
+    window.addEventListener("avatar_updated", handleAvatarUpdate);
+    window.addEventListener("storage", handleAvatarUpdate);
+    return () => {
+      window.removeEventListener("avatar_updated", handleAvatarUpdate);
+      window.removeEventListener("storage", handleAvatarUpdate);
+    };
+  }, [currentUser]);
 
   const isAdmin = currentUser?.role === "ADMIN";
 
@@ -82,22 +79,13 @@ function Navbar({
             justifyContent: "space-between",
           }}
         >
-          {/* Logo & App Name */}
+          {/* Logo & App Name - Static Brand Header (Non-interactive) */}
           <Box
             display="flex"
             alignItems="center"
             gap={{ xs: 1, sm: 1.5 }}
-            onClick={() => setInfoOpen(true)}
             sx={{
-              cursor: "pointer",
-              transition: "transform 0.2s, opacity 0.2s",
-              "&:hover": {
-                transform: "scale(1.02)",
-                opacity: 0.9,
-              },
-              "&:active": {
-                transform: "scale(0.98)",
-              },
+              userSelect: "none",
             }}
           >
             <Box
@@ -105,22 +93,35 @@ function Navbar({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: { xs: 34, sm: 40 },
-                height: { xs: 34, sm: 40 },
-                borderRadius: "8px",
+                width: { xs: 38, sm: 42 },
+                height: { xs: 38, sm: 42 },
+                borderRadius: profileAvatar ? "50%" : "10px",
+                border: profileAvatar
+                  ? `2px solid ${theme.palette.primary.main}`
+                  : `1px solid ${theme.palette.divider}`,
+                background: profileAvatar
+                  ? "transparent"
+                  : theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.04)"
+                  : "rgba(0, 0, 0, 0.04)",
                 overflow: "hidden",
-                boxShadow: `0 4px 12px ${theme.palette.primary.main}4D`,
+                boxShadow: profileAvatar
+                  ? `0 0 16px ${theme.palette.primary.main}55`
+                  : `0 4px 14px ${theme.palette.primary.main}33`,
                 flexShrink: 0,
+                transition: "all 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
               }}
             >
               <Box
                 component="img"
-                src={logo}
+                src={profileAvatar || logo}
                 alt="Ash Flow Logo"
                 sx={{
                   width: "100%",
                   height: "100%",
-                  objectFit: "cover",
+                  objectFit: profileAvatar ? "cover" : "contain",
+                  p: profileAvatar ? 0 : 0.4,
+                  transition: "all 0.3s ease",
                 }}
               />
             </Box>
@@ -132,7 +133,7 @@ function Navbar({
                   letterSpacing: "-0.02em",
                   color: theme.palette.text.primary,
                   lineHeight: 1.1,
-                  fontSize: { xs: "1rem", sm: "1.2rem" },
+                  fontSize: { xs: "0.95rem", sm: "1.2rem" },
                 }}
               >
                 ASH FLOW
@@ -141,31 +142,38 @@ function Navbar({
                 variant="caption"
                 sx={{
                   color: theme.palette.primary.main,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  display: { xs: "none", sm: "block" },
-                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.03em",
+                  display: "block",
+                  lineHeight: 1.2,
+                  fontSize: { xs: "0.68rem", sm: "0.72rem" },
+                  maxWidth: { xs: 120, sm: 200 },
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
-                FINANCE PORTAL
+                {currentUser?.fullName || (currentUser?.username ? `@${currentUser.username}` : "FINANCE PORTAL")}
               </Typography>
             </Box>
           </Box>
 
           {/* Right Nav Actions */}
           <Box display="flex" alignItems="center" gap={{ xs: 0.8, sm: 1.2 }}>
-            {/* User Chip Display */}
+            {/* User Chip Display - Static Badge (Non-clickable) */}
             {currentUser && (
               <Chip
                 size="small"
-                icon={<PersonIcon sx={{ fontSize: "15px !important" }} />}
                 label={currentUser.fullName || currentUser.username}
                 sx={{
                   display: { xs: "none", md: "inline-flex" },
                   height: 32,
+                  px: 0.6,
                   fontWeight: 700,
                   fontSize: "0.8rem",
                   borderRadius: "8px",
+                  cursor: "default",
+                  userSelect: "none",
                   background:
                     theme.palette.mode === "dark"
                       ? "rgba(255, 255, 255, 0.05)"
@@ -254,68 +262,6 @@ function Navbar({
               </Tooltip>
             )}
 
-            {/* Theme Switcher Button */}
-            <Tooltip title="Change Theme">
-              <IconButton
-                onClick={handleMenuOpen}
-                size="small"
-                sx={{
-                  color: theme.palette.text.secondary,
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: "8px",
-                  width: 36,
-                  height: 36,
-                  "&:hover": {
-                    background: theme.palette.divider,
-                  },
-                }}
-              >
-                <PaletteIcon sx={{ fontSize: 19 }} />
-              </IconButton>
-            </Tooltip>
-
-            {/* Theme Selection Menu */}
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleMenuClose}
-              transformOrigin={{ horizontal: "right", vertical: "top" }}
-              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-              PaperProps={{
-                sx: {
-                  mt: 1,
-                  borderRadius: 1.5,
-                  boxShadow: theme.palette.custom.paperShadow,
-                  background: theme.palette.background.paper,
-                  border: `1px solid ${theme.palette.divider}`,
-                },
-              }}
-            >
-              {themes.map((t) => (
-                <MenuItem
-                  key={t.key}
-                  onClick={() => handleThemeChange(t.key)}
-                  sx={{ py: 1.5, px: 2 }}
-                >
-                  <ListItemIcon sx={{ minWidth: 32 }}>
-                    {activeTheme === t.key ? (
-                      <CheckIcon
-                        fontSize="small"
-                        sx={{ color: theme.palette.primary.main }}
-                      />
-                    ) : null}
-                  </ListItemIcon>
-                  <Typography
-                    variant="body2"
-                    fontWeight={activeTheme === t.key ? 700 : 500}
-                    color={theme.palette.text.primary}
-                  >
-                    {t.label}
-                  </Typography>
-                </MenuItem>
-              ))}
-            </Menu>
-
             {/* Desktop Reports Button */}
             <Tooltip title="View Graphical Reports & Analytics">
               <Button
@@ -332,10 +278,15 @@ function Navbar({
                   px: 2,
                   py: 0.5,
                   background: theme.palette.custom.successBoxBg,
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
                     background: theme.palette.custom.successBoxBorder,
                     borderColor: theme.palette.primary.main,
-                    boxShadow: `0 0 15px ${theme.palette.primary.main}4D`,
+                    boxShadow: `0 0 16px ${theme.palette.primary.main}66`,
+                    transform: "translateY(-1px)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.96)",
                   },
                 }}
               >
@@ -356,9 +307,14 @@ function Navbar({
                   borderRadius: "8px",
                   width: 36,
                   height: 36,
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
                     background: theme.palette.custom.successBoxBorder,
-                    boxShadow: `0 0 12px ${theme.palette.primary.main}66`,
+                    boxShadow: `0 0 14px ${theme.palette.primary.main}88`,
+                    transform: "scale(1.08)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.92)",
                   },
                 }}
               >
@@ -366,34 +322,42 @@ function Navbar({
               </IconButton>
             </Tooltip>
 
-            {/* Logout Button */}
-            {onLogout && (
-              <Tooltip title="Log Out">
-                <IconButton
-                  onClick={onLogout}
-                  size="small"
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    border: `1px solid ${theme.palette.divider}`,
-                    borderRadius: "8px",
-                    width: 36,
-                    height: 36,
-                    "&:hover": {
-                      background: theme.palette.error.main + "22",
-                      color: theme.palette.error.main,
-                      borderColor: theme.palette.error.main + "66",
-                    },
-                  }}
-                >
-                  <LogoutIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Tooltip>
-            )}
+            {/* iOS Settings & Profile Button */}
+            <Tooltip title="Settings & Profile">
+              <IconButton
+                onClick={() => setSettingsOpen(true)}
+                size="small"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: "8px",
+                  width: 36,
+                  height: 36,
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  "&:hover": {
+                    color: theme.palette.primary.main,
+                    borderColor: theme.palette.primary.main,
+                    background: `${theme.palette.primary.main}14`,
+                    transform: "rotate(45deg)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.92)",
+                  },
+                }}
+              >
+                <SettingsIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
           </Box>
         </Toolbar>
       </Container>
 
-      <AppInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        currentUser={currentUser}
+        onLogout={onLogout}
+      />
     </AppBar>
   );
 }

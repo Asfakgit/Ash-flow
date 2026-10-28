@@ -126,12 +126,18 @@ function CustomDialog({
     <Dialog
       open={Boolean(open)}
       TransitionComponent={Transition}
-      keepMounted
       onClose={onClose}
       maxWidth="xs"
       fullWidth
+      sx={{
+        zIndex: 99999,
+        "& .MuiBackdrop-root": {
+          zIndex: 99998,
+        },
+      }}
       PaperProps={{
         sx: {
+          zIndex: 100000,
           p: { xs: 2.5, sm: 3 },
           textAlign: "center",
           borderRadius: { xs: 1.5, sm: 2 },
@@ -202,14 +208,16 @@ function CustomDialog({
               color="error"
               onClick={async () => {
                 if (isSubmitting) return;
-                if (onConfirm) {
-                  setIsSubmitting(true);
-                  try {
+                setIsSubmitting(true);
+                try {
+                  if (onConfirm) {
                     await onConfirm();
-                  } finally {
-                    // Dialog usually closes in onConfirm, but just in case:
-                    setIsSubmitting(false);
                   }
+                } catch (err) {
+                  console.error("CustomDialog onConfirm error:", err);
+                } finally {
+                  setIsSubmitting(false);
+                  if (onClose) onClose();
                 }
               }}
               disabled={isSubmitting}

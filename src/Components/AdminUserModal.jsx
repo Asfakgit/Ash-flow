@@ -18,6 +18,11 @@ import {
   Tooltip,
   Zoom,
   Divider,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
@@ -31,10 +36,17 @@ import PersonIcon from '@mui/icons-material/Person';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import LockIcon from '@mui/icons-material/Lock';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import LockResetIcon from '@mui/icons-material/LockReset';
+import KeyIcon from '@mui/icons-material/Key';
 import {
   adminGetUsers,
   adminUpdateUserStatus,
   adminDeleteUser,
+  adminApprovePasswordReset,
+  adminSetUserPassword,
+  adminGetUserTransactions,
 } from '../Services/SheetService';
 
 const Transition = forwardRef(function Transition(props, ref) {
@@ -69,6 +81,19 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
     title: '',
     message: '',
     action: null,
+  });
+
+  // Sheet Inspection Modal State (Admin viewing a user's transactions with permission)
+  const [inspectUser, setInspectUser] = useState(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [inspectData, setInspectData] = useState([]);
+  const [inspectError, setInspectError] = useState('');
+
+  // Manual Password Override Modal State
+  const [passwordDialog, setPasswordDialog] = useState({
+    open: false,
+    username: '',
+    newPassword: '',
   });
 
   const loadUsers = async () => {
@@ -227,6 +252,77 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
     });
   };
 
+  const handleApproveReset = async (targetUsername) => {
+    setActionLoading(true);
+    setFeedback({ type: '', message: '' });
+    try {
+      const res = await adminApprovePasswordReset(targetUsername);
+      setFeedback({
+        type: 'success',
+        message: res.message || `Password reset approved for @${targetUsername}.`,
+      });
+      await loadUsers();
+    } catch (err) {
+      console.error('Approve reset error:', err);
+      setFeedback({
+        type: 'error',
+        message: err.message || `Failed to approve password reset.`,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleViewUserSheet = async (user) => {
+    if (!user.allowAdminView) {
+      setFeedback({
+        type: 'error',
+        message: `User @${user.username} has kept their sheet private. The admin can only view this sheet with explicit permission from the user.`,
+      });
+      return;
+    }
+    setInspectUser(user);
+    setInspectLoading(true);
+    setInspectError('');
+    setInspectData([]);
+    try {
+      const res = await adminGetUserTransactions(user.username);
+      setInspectData(res.transactions || []);
+    } catch (err) {
+      setInspectError(err.message || 'Failed to load user sheet records.');
+    } finally {
+      setInspectLoading(false);
+    }
+  };
+
+  const handleAdminSetPasswordSubmit = async () => {
+    if (!passwordDialog.newPassword || passwordDialog.newPassword.length < 6) {
+      setFeedback({
+        type: 'error',
+        message: 'New password must be at least 6 characters.',
+      });
+      return;
+    }
+    setActionLoading(true);
+    setFeedback({ type: '', message: '' });
+    try {
+      const res = await adminSetUserPassword(passwordDialog.username, passwordDialog.newPassword);
+      setFeedback({
+        type: 'success',
+        message: res.message || `Password updated for @${passwordDialog.username}.`,
+      });
+      setPasswordDialog({ open: false, username: '', newPassword: '' });
+      await loadUsers();
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        message: err.message || `Failed to update password.`,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const getStatusChip = (status) => {
     switch (status) {
       case 'APPROVED':
@@ -241,6 +337,21 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
               fontWeight: 700,
               fontSize: '0.72rem',
               border: '1px solid rgba(16, 185, 129, 0.3)',
+            }}
+          />
+        );
+      case 'RESET_PENDING':
+        return (
+          <Chip
+            size="small"
+            label="RESET REQUESTED"
+            icon={<LockResetIcon sx={{ fontSize: '14px !important' }} />}
+            sx={{
+              backgroundColor: 'rgba(245, 158, 11, 0.2)',
+              color: '#f59e0b',
+              fontWeight: 800,
+              fontSize: '0.72rem',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
             }}
           />
         );
@@ -708,6 +819,38 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
                           <Box display="flex" alignItems="center" gap={1.5} mt={0.5} flexWrap="wrap">
                             {getStatusChip(u.status)}
 
+                            {!isCurrentAdmin && (
+                              u.allowAdminView ? (
+                                <Chip
+                                  size="small"
+                                  icon={<VisibilityIcon sx={{ fontSize: '13px !important' }} />}
+                                  label="Sheet Shared"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                    color: theme.palette.primary.main,
+                                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                                  }}
+                                />
+                              ) : (
+                                <Chip
+                                  size="small"
+                                  icon={<LockIcon sx={{ fontSize: '12px !important' }} />}
+                                  label="Private"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                                    color: theme.palette.text.secondary,
+                                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                                  }}
+                                />
+                              )
+                            )}
+
                             {u.sheetName ? (
                               <Box display="flex" alignItems="center" gap={0.5}>
                                 <TableChartIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
@@ -744,7 +887,28 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
                         gap={1}
                         width={{ xs: '100%', md: 'auto' }}
                         justifyContent={{ xs: 'flex-end', md: 'flex-start' }}
+                        flexWrap="wrap"
                       >
+                        {u.hasResetPending && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            disabled={actionLoading}
+                            onClick={() => handleApproveReset(u.username)}
+                            startIcon={<LockResetIcon />}
+                            sx={{
+                              fontWeight: 700,
+                              textTransform: 'none',
+                              borderRadius: 1.5,
+                              fontSize: '0.82rem',
+                              px: 1.5,
+                            }}
+                          >
+                            Approve Reset
+                          </Button>
+                        )}
+
                         {u.status === 'PENDING' && (
                           <>
                             <Button
@@ -792,22 +956,66 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
                                 sx={{ fontWeight: 600, fontSize: '0.75rem' }}
                               />
                             ) : (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="warning"
-                                disabled={actionLoading}
-                                onClick={() => promptStatusChange(u.username, 'DISABLED')}
-                                startIcon={<BlockIcon />}
-                                sx={{
-                                  fontWeight: 700,
-                                  textTransform: 'none',
-                                  borderRadius: 1.5,
-                                  fontSize: '0.82rem',
-                                }}
-                              >
-                                Disable Access
-                              </Button>
+                              <>
+                                {u.allowAdminView ? (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    disabled={actionLoading}
+                                    onClick={() => handleViewUserSheet(u)}
+                                    startIcon={<TableChartIcon />}
+                                    sx={{
+                                      fontWeight: 700,
+                                      textTransform: 'none',
+                                      borderRadius: 1.5,
+                                      fontSize: '0.82rem',
+                                    }}
+                                  >
+                                    View Sheet
+                                  </Button>
+                                ) : (
+                                  <Tooltip
+                                    title="User has kept their sheet private. The admin can only view this sheet with explicit permission from the user."
+                                    arrow
+                                  >
+                                    <span>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        disabled
+                                        startIcon={<LockIcon />}
+                                        sx={{
+                                          fontWeight: 700,
+                                          textTransform: 'none',
+                                          borderRadius: 1.5,
+                                          fontSize: '0.82rem',
+                                          opacity: 0.6,
+                                        }}
+                                      >
+                                        Sheet Private
+                                      </Button>
+                                    </span>
+                                  </Tooltip>
+                                )}
+
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="warning"
+                                  disabled={actionLoading}
+                                  onClick={() => promptStatusChange(u.username, 'DISABLED')}
+                                  startIcon={<BlockIcon />}
+                                  sx={{
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    borderRadius: 1.5,
+                                    fontSize: '0.82rem',
+                                  }}
+                                >
+                                  Disable
+                                </Button>
+                              </>
                             )}
                           </>
                         )}
@@ -833,23 +1041,50 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
                         )}
 
                         {!isCurrentAdmin && (
-                          <Tooltip title="Delete user and tab permanently">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              disabled={actionLoading}
-                              onClick={() => promptDeleteUser(u.username)}
-                              sx={{
-                                borderRadius: 1.5,
-                                border: `1px solid ${theme.palette.error.main}33`,
-                                '&:hover': {
-                                  background: theme.palette.error.main + '22',
-                                },
-                              }}
-                            >
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <>
+                            <Tooltip title="Set password for this user">
+                              <IconButton
+                                size="small"
+                                disabled={actionLoading}
+                                onClick={() =>
+                                  setPasswordDialog({
+                                    open: true,
+                                    username: u.username,
+                                    newPassword: '',
+                                  })
+                                }
+                                sx={{
+                                  borderRadius: 1.5,
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  color: 'text.secondary',
+                                  '&:hover': {
+                                    color: theme.palette.primary.main,
+                                    borderColor: theme.palette.primary.main,
+                                  },
+                                }}
+                              >
+                                <KeyIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+
+                            <Tooltip title="Delete user and tab permanently">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={actionLoading}
+                                onClick={() => promptDeleteUser(u.username)}
+                                sx={{
+                                  borderRadius: 1.5,
+                                  border: `1px solid ${theme.palette.error.main}33`,
+                                  '&:hover': {
+                                    background: theme.palette.error.main + '22',
+                                  },
+                                }}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
                         )}
                       </Box>
                     </Box>
@@ -913,6 +1148,154 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
               sx={{ borderRadius: 1.5, fontWeight: 700, textTransform: 'none' }}
             >
               {actionLoading ? <CircularProgress size={20} color="inherit" /> : 'Confirm'}
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Inspection Modal: View Permitted User's Sheet */}
+      <Dialog
+        open={Boolean(inspectUser)}
+        onClose={() => setInspectUser(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2.5,
+            p: 2,
+            background:
+              theme.palette.mode === 'dark'
+                ? 'rgba(20, 20, 25, 0.98)'
+                : 'rgba(255, 255, 255, 0.98)',
+            border: `1px solid ${theme.palette.divider}`,
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <TableChartIcon color="primary" />
+            <Typography variant="h6" fontWeight="bold">
+              User Sheet: {inspectUser?.fullName || inspectUser?.username} (@{inspectUser?.username})
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setInspectUser(null)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+            Viewing Google Sheet tab: <code>{inspectUser?.sheetName || 'Default'}</code> (Permission granted by user)
+          </Typography>
+
+          {inspectLoading ? (
+            <Box textAlign="center" py={4}>
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Loading records from Google Sheets...
+              </Typography>
+            </Box>
+          ) : inspectError ? (
+            <Alert severity="error" sx={{ my: 2 }}>
+              {inspectError}
+            </Alert>
+          ) : inspectData.length <= 1 ? (
+            <Box textAlign="center" py={4}>
+              <Typography variant="body2" color="text.secondary">
+                This user has no transaction records in their sheet yet.
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ maxHeight: 380, overflowY: 'auto' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Person</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Amount</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Method</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Date</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Notes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {inspectData.slice(1).map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell sx={{ fontWeight: 600 }}>{row[1] || '-'}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
+                        ₹{Number(row[2] || 0).toLocaleString('en-IN')}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={row[3] || '-'}
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </TableCell>
+                      <TableCell>{row[6] || row[4] || 'Cash'}</TableCell>
+                      <TableCell>{row[4] || '-'}</TableCell>
+                      <TableCell>{row[5] || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Manual Set Password Dialog */}
+      <Dialog
+        open={passwordDialog.open}
+        onClose={() => setPasswordDialog({ open: false, username: '', newPassword: '' })}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2.5,
+            p: 2,
+            background:
+              theme.palette.mode === 'dark'
+                ? 'rgba(20, 20, 25, 0.98)'
+                : 'rgba(255, 255, 255, 0.98)',
+            border: `1px solid ${theme.palette.divider}`,
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, fontSize: '1.1rem', pb: 1 }}>
+          Set Password for @{passwordDialog.username}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Assign a new password for this user. Their existing session will be invalidated.
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            type="password"
+            label="New Password"
+            value={passwordDialog.newPassword}
+            onChange={(e) =>
+              setPasswordDialog((prev) => ({ ...prev, newPassword: e.target.value }))
+            }
+            placeholder="Min 6 characters"
+            autoFocus
+          />
+
+          <Box display="flex" justifyContent="flex-end" gap={1.5} mt={3}>
+            <Button
+              variant="outlined"
+              onClick={() =>
+                setPasswordDialog({ open: false, username: '', newPassword: '' })
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleAdminSetPasswordSubmit}
+              disabled={actionLoading}
+            >
+              {actionLoading ? <CircularProgress size={20} color="inherit" /> : 'Set Password'}
             </Button>
           </Box>
         </DialogContent>

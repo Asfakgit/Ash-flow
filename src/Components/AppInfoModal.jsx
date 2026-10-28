@@ -8,13 +8,19 @@ import {
   Paper,
   Tooltip,
   Zoom,
+  Switch,
+  CircularProgress,
 } from "@mui/material";
 import { forwardRef, useState, useEffect, useRef } from "react";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import SecurityIcon from "@mui/icons-material/Security";
+import LockIcon from "@mui/icons-material/Lock";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useTheme } from "@mui/material/styles";
+import { updateAdminViewPermission, getAuthUser, getUserAvatar, updateUserProfileAvatar } from "../Services/SheetService";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -92,34 +98,89 @@ const compressImage = (file, maxSize = 256, quality = 0.82) => {
   });
 };
 
-function AppInfoModal({ open, onClose }) {
+function AppInfoModal({ open, onClose, currentUser }) {
   const theme = useTheme();
   const fileInputRef = useRef(null);
   const [uploadError, setUploadError] = useState("");
 
-  const [avatarImage, setAvatarImage] = useState(() => {
-    try {
-      return localStorage.getItem("app_avatar_img") || null;
-    } catch {
-      return null;
-    }
+  const userObj = currentUser || getAuthUser();
+  const isAdmin = userObj?.role === "ADMIN";
+
+  const [allowAdminView, setAllowAdminView] = useState(() => {
+    return Boolean(userObj?.allowAdminView);
   });
+  const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [privacyMessage, setPrivacyMessage] = useState("");
 
   useEffect(() => {
-    try {
-      if (avatarImage) {
-        localStorage.setItem("app_avatar_img", avatarImage);
-      } else {
-        localStorage.removeItem("app_avatar_img");
-      }
-    } catch (err) {
-      console.warn("Storage quota exceeded or storage unavailable:", err);
-      try {
-        localStorage.removeItem("app_avatar_img");
-      } catch {}
-      setUploadError("Image is too large to save in local storage.");
+    if (open) {
+      const active = currentUser || getAuthUser();
+      setAllowAdminView(Boolean(active?.allowAdminView));
+      setPrivacyMessage("");
     }
-  }, [avatarImage]);
+  }, [open, currentUser]);
+
+  const handleTogglePrivacy = async (e) => {
+    const newVal = e.target.checked;
+    setAllowAdminView(newVal);
+    setPrivacyLoading(true);
+    setPrivacyMessage("");
+    try {
+      const res = await updateAdminViewPermission(newVal);
+      setPrivacyMessage(res.message || (newVal ? "Sheet shared with Admin." : "Sheet set to private."));
+    } catch (err) {
+      setAllowAdminView(!newVal);
+      setPrivacyMessage(err.message || "Failed to update permission.");
+    } finally {
+      setPrivacyLoading(false);
+    }
+  };
+
+  const [avatarImage, setAvatarImage] = useState(() => getUserAvatar(userObj));
+
+  useEffect(() => {
+    if (open) {
+      setAvatarImage(getUserAvatar(userObj));
+    }
+  }, [open, userObj]);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please select a valid image file (PNG, JPG, WebP).");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError("Image size exceeds 2MB limit. Please choose a smaller image.");
+      return;
+    }
+
+    setUploadError("");
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const dataUrl = event.target?.result;
+        setAvatarImage(dataUrl);
+        await updateUserProfileAvatar(dataUrl);
+      } catch (err) {
+        console.warn("Avatar save error:", err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = async (e) => {
+    e.stopPropagation();
+    try {
+      setAvatarImage(null);
+      await updateUserProfileAvatar(null);
+    } catch (err) {
+      console.warn("Avatar remove error:", err);
+    }
+  };
 
   // Lock background body scroll when modal is open
   useEffect(() => {
@@ -134,28 +195,6 @@ function AppInfoModal({ open, onClose }) {
       };
     }
   }, [open]);
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setUploadError("");
-      try {
-        const compressed = await compressImage(file, 256, 0.82);
-        setAvatarImage(compressed);
-      } catch (err) {
-        console.error("Avatar compression error:", err);
-        setUploadError(err.message || "Failed to process image.");
-      } finally {
-        if (e.target) e.target.value = "";
-      }
-    }
-  };
-
-  const handleRemoveImage = (e) => {
-    e.stopPropagation();
-    setUploadError("");
-    setAvatarImage(null);
-  };
 
   return (
     <Dialog
@@ -410,6 +449,80 @@ function AppInfoModal({ open, onClose }) {
             experience.
           </Typography>
         </Paper>
+
+        {/* Privacy & Admin Sheet Access Settings (For Regular Users) */}
+        {!isAdmin && (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.2,
+              mt: 2,
+              borderRadius: 1.5,
+              background: theme.palette.custom.cardGradient,
+              border: `1px solid ${theme.palette.divider}`,
+              textAlign: "left",
+              boxShadow: theme.palette.custom.paperShadow,
+            }}
+          >
+            <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+              <Box display="flex" alignItems="center" gap={1}>
+                {allowAdminView ? (
+                  <VisibilityIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
+                ) : (
+                  <LockIcon sx={{ color: theme.palette.warning.main, fontSize: 20 }} />
+                )}
+                <Typography
+                  variant="subtitle2"
+                  fontWeight="800"
+                  sx={{
+                    color: theme.palette.text.primary,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  Admin Sheet Access
+                </Typography>
+              </Box>
+
+              <Box display="flex" alignItems="center" gap={0.5}>
+                {privacyLoading && <CircularProgress size={18} />}
+                <Switch
+                  checked={allowAdminView}
+                  onChange={handleTogglePrivacy}
+                  disabled={privacyLoading}
+                  color="primary"
+                  size="small"
+                />
+              </Box>
+            </Box>
+
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", lineHeight: 1.5, fontSize: "0.78rem" }}
+            >
+              {allowAdminView
+                ? "Your Google Sheet records can be inspected by the administrator."
+                : "Your Google Sheet records are strictly private. The administrator cannot view your transactions."}
+            </Typography>
+
+            {privacyMessage && (
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  mt: 1,
+                  fontWeight: 600,
+                  color: allowAdminView
+                    ? theme.palette.primary.main
+                    : theme.palette.warning.main,
+                  fontSize: "0.74rem",
+                }}
+              >
+                {privacyMessage}
+              </Typography>
+            )}
+          </Paper>
+        )}
       </DialogContent>
     </Dialog>
   );

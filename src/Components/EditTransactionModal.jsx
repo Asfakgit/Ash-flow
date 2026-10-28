@@ -324,9 +324,18 @@ function EditTransactionModal({
               disabled={loading}
               variant="outlined"
             >
-              <MenuItem value="Lent">Lent (I gave)</MenuItem>
-              <MenuItem value="Borrowed">Borrowed (I received)</MenuItem>
-              <MenuItem value="Partial Payment">Partial Payment</MenuItem>
+              <MenuItem value="Lent" sx={{ color: "#10B981", fontWeight: 700 }}>
+                ↑ Lent (I gave)
+              </MenuItem>
+              <MenuItem value="Borrowed" sx={{ color: "#EF4444", fontWeight: 700 }}>
+                ↓ Borrowed (I received)
+              </MenuItem>
+              <MenuItem value="Partial Payment" sx={{ color: "#0A84FF", fontWeight: 700 }}>
+                💳 Partial Payment
+              </MenuItem>
+              <MenuItem value="Settled" sx={{ color: "#94A3B8", fontWeight: 700 }}>
+                ✓ Settled / Closed
+              </MenuItem>
             </TextField>
 
             <TextField
@@ -432,27 +441,44 @@ function EditTransactionModal({
           Cancel
         </Button>
 
-        <Button
-          variant="contained"
-          onClick={handleSave}
-          disabled={loading}
-          fullWidth={{ xs: true, sm: false }}
-          sx={{
-            px: 4,
-            py: { xs: 1.2, sm: 1 },
-            minWidth: 140,
-            background: theme.palette.custom.secondaryGradient,
-            "&:hover": {
-              background: theme.palette.custom.secondaryHoverGradient,
-            },
-          }}
-        >
-          {loading ? (
-            <CircularProgress size={24} color="inherit" />
-          ) : (
-            "Save Changes"
-          )}
-        </Button>
+        {(() => {
+          const isLent = type === "Lent";
+          const isBorrowed = type === "Borrowed";
+          const btnGradient = isLent
+            ? "linear-gradient(135deg, #10B981 0%, #059669 100%)"
+            : isBorrowed
+            ? "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)"
+            : "linear-gradient(135deg, #0A84FF 0%, #0066CC 100%)";
+          const btnHoverGradient = isLent
+            ? "linear-gradient(135deg, #34D399 0%, #10B981 100%)"
+            : isBorrowed
+            ? "linear-gradient(135deg, #F87171 0%, #EF4444 100%)"
+            : "linear-gradient(135deg, #38BDF8 0%, #0A84FF 100%)";
+
+          return (
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={loading}
+              fullWidth={{ xs: true, sm: false }}
+              sx={{
+                px: 4,
+                py: { xs: 1.2, sm: 1 },
+                minWidth: 140,
+                background: btnGradient,
+                "&:hover": {
+                  background: btnHoverGradient,
+                },
+              }}
+            >
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          );
+        })()}
       </DialogActions>
     </Dialog>
   );

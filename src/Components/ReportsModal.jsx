@@ -360,98 +360,130 @@ function ReportsModal({ open, onClose, transactions = [] }) {
         },
       }}
     >
-      {/* Header */}
+      {/* Header - Compact & Simple */}
       <DialogTitle
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           px: { xs: 2, sm: 3 },
-          pt: "max(env(safe-area-inset-top), 16px)",
-          pb: 1.5,
+          pt: "max(env(safe-area-inset-top), 10px)",
+          pb: { xs: 1, sm: 1.2 },
           borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
-          flexWrap: "wrap",
-          gap: 1.5,
         }}
       >
-        <Box display="flex" alignItems="center" gap={1.5}>
+        <Box display="flex" alignItems="center" gap={1.2}>
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: { xs: 34, sm: 40 },
-              height: { xs: 34, sm: 40 },
+              width: { xs: 28, sm: 36 },
+              height: { xs: 28, sm: 36 },
               borderRadius: "8px",
               background: theme.palette.custom.primaryGradient,
-              color: theme.palette.text.primary,
-              boxShadow: "0 4px 15px rgba(16, 185, 129, 0.4)",
+              color: "#ffffff",
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.35)",
             }}
           >
-            <AssessmentIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+            <AssessmentIcon sx={{ fontSize: { xs: 17, sm: 20 } }} />
           </Box>
-          <Box>
-            <Typography
-              variant="h6"
-              fontWeight="800"
-              sx={{
-                color: theme.palette.text.primary,
-                fontSize: { xs: "1.1rem", sm: "1.35rem" },
-              }}
-            >
-              Reports & Analytics
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: theme.palette.text.secondary, fontSize: "0.75rem" }}
-            >
-              Comprehensive financial breakdown & cash flow metrics
-            </Typography>
-          </Box>
+          <Typography
+            variant="h6"
+            fontWeight="800"
+            sx={{
+              color: theme.palette.text.primary,
+              fontSize: { xs: "0.98rem", sm: "1.2rem" },
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Reports & Analytics
+          </Typography>
         </Box>
 
         <IconButton
           onClick={onClose}
+          size="small"
           sx={{
             color: theme.palette.text.secondary,
+            p: { xs: 0.5, sm: 0.8 },
             "&:hover": {
               color: theme.palette.text.primary,
               backgroundColor: theme.palette.divider,
             },
           }}
         >
-          <CloseIcon />
+          <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
 
       <DialogContent
-        sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 }, overflowY: "auto" }}
+        sx={{
+          px: { xs: 1.5, sm: 3 },
+          py: { xs: 1, sm: 1.8 },
+          overflowY: "auto",
+        }}
       >
-        {/* TIME RANGE CONTROLS */}
+        {/* TIME RANGE & COMPACT KPI CONTROLS - Clean 1-2 Line Flow */}
         <Box
           display="flex"
           justifyContent="space-between"
           alignItems="center"
           flexWrap="wrap"
-          gap={1.5}
-          mb={2}
+          gap={1}
+          mb={{ xs: 1.2, sm: 1.6 }}
         >
-          <Typography
-            variant="subtitle2"
-            fontWeight="700"
-            sx={{
-              color: theme.palette.text.primary,
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
-            <AccountBalanceWalletIcon
-              sx={{ color: theme.palette.primary.main, fontSize: 18 }}
+          {/* Quick KPI Chips */}
+          <Box display="flex" alignItems="center" gap={0.8} flexWrap="wrap">
+            <Chip
+              size="small"
+              label={`Lent: ₹${summary.currentLent.toLocaleString("en-IN")}`}
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.7rem",
+                bgcolor: "rgba(16, 185, 129, 0.14)",
+                color: theme.palette.primary.main,
+                border: "1px solid rgba(16, 185, 129, 0.28)",
+                height: 23,
+              }}
             />
-            Overview Summary
-          </Typography>
+            <Chip
+              size="small"
+              label={`Borrowed: ₹${summary.currentBorrowed.toLocaleString("en-IN")}`}
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.7rem",
+                bgcolor: "rgba(239, 68, 68, 0.14)",
+                color: "#ef4444",
+                border: "1px solid rgba(239, 68, 68, 0.28)",
+                height: 23,
+              }}
+            />
+            <Chip
+              size="small"
+              label={`Net: ₹${Math.abs(netBalance).toLocaleString("en-IN")}`}
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.7rem",
+                bgcolor:
+                  netBalance >= 0
+                    ? "rgba(168, 85, 247, 0.14)"
+                    : "rgba(244, 63, 94, 0.14)",
+                color:
+                  netBalance >= 0
+                    ? theme.palette.custom.netPositiveColor
+                    : theme.palette.error.main,
+                border: `1px solid ${
+                  netBalance >= 0
+                    ? "rgba(168, 85, 247, 0.28)"
+                    : "rgba(244, 63, 94, 0.28)"
+                }`,
+                height: 23,
+              }}
+            />
+          </Box>
 
+          {/* Time Range Toggle */}
           <ToggleButtonGroup
             value={timeRange}
             exclusive
@@ -460,560 +492,46 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             sx={{
               backgroundColor: "rgba(15, 23, 42, 0.5)",
               borderRadius: "8px",
-              p: 0.3,
+              p: 0.25,
               border: "1px solid rgba(148, 163, 184, 0.15)",
               "& .MuiToggleButton-root": {
                 border: "none",
                 borderRadius: "6px",
-                px: { xs: 1.2, sm: 1.8 },
-                py: 0.3,
-                fontSize: "0.75rem",
+                px: { xs: 1, sm: 1.5 },
+                py: 0.2,
+                fontSize: { xs: "0.7rem", sm: "0.75rem" },
                 fontWeight: 700,
                 color: theme.palette.text.secondary,
                 "&.Mui-selected": {
                   color: "#ffffff",
                   backgroundColor: theme.palette.primary.main,
-                  boxShadow: `0 0 12px ${theme.palette.primary.main}66`,
+                  boxShadow: `0 0 10px ${theme.palette.primary.main}55`,
                 },
               },
             }}
           >
-            <ToggleButton value="3m">3 Months</ToggleButton>
-            <ToggleButton value="6m">6 Months</ToggleButton>
-            <ToggleButton value="year">This Year</ToggleButton>
-            <ToggleButton value="all">All Time</ToggleButton>
+            <ToggleButton value="3m">3M</ToggleButton>
+            <ToggleButton value="6m">6M</ToggleButton>
+            <ToggleButton value="year">1Y</ToggleButton>
+            <ToggleButton value="all">ALL</ToggleButton>
           </ToggleButtonGroup>
         </Box>
-
-        {/* PRIMARY FINANCIAL SUMMARY CARDS */}
-        <Grid container spacing={1.5} mb={2}>
-          <Grid item xs={12} sm={4}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${theme.palette.custom.successBoxBg}, rgba(16, 185, 129, 0.05))`,
-                border: "1px solid rgba(16, 185, 129, 0.2)",
-                boxShadow: "0 4px 20px rgba(16, 185, 129, 0.05)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              {/* decorative circle */}
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: -20,
-                  right: -20,
-                  width: 80,
-                  height: 80,
-                  borderRadius: "50%",
-                  background: "rgba(16, 185, 129, 0.1)",
-                }}
-              />
-
-              <Box
-                display="flex"
-                alignItems="center"
-                justifyContent="space-between"
-                mb={1.5}
-                position="relative"
-              >
-                <Typography
-                  variant="caption"
-                  fontWeight="800"
-                  sx={{
-                    color: theme.palette.primary.main,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Lent Overview
-                </Typography>
-                <ArrowCircleUpIcon
-                  sx={{
-                    color: theme.palette.primary.main,
-                    fontSize: 24,
-                    opacity: 0.8,
-                  }}
-                />
-              </Box>
-
-              <Box
-                display="flex"
-                flexDirection="column"
-                gap={0.5}
-                position="relative"
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  Outstanding (To Receive)
-                </Typography>
-                <Typography
-                  variant="h4"
-                  fontWeight="800"
-                  sx={{
-                    color: theme.palette.primary.main,
-                    mb: 1,
-                    textShadow: "0 2px 10px rgba(16,185,129,0.2)",
-                  }}
-                >
-                  ₹{summary.currentLent.toLocaleString("en-IN")}
-                </Typography>
-
-                <Box
-                  display="flex"
-                  flexDirection="column"
-                  gap={0.5}
-                  sx={{
-                    mt: 1,
-                    pt: 1.5,
-                    borderTop: "1px dashed rgba(16, 185, 129, 0.2)",
-                  }}
-                >
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography
-                      variant="caption"
-                      sx={{ color: theme.palette.text.secondary }}
-                    >
-                      Total Volume
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      fontWeight="700"
-                      sx={{ color: theme.palette.text.primary }}
-                    >
-                      ₹{summary.totalLent.toLocaleString("en-IN")}
-                    </Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography
-                      variant="caption"
-                      sx={{ color: theme.palette.text.secondary }}
-                    >
-                      Top: {topLentPerson.name}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      fontWeight="700"
-                      sx={{ color: theme.palette.text.primary }}
-                    >
-                      ₹{topLentPerson.amount.toLocaleString("en-IN")}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${theme.palette.custom.secondaryBoxBg}, rgba(99, 102, 241, 0.05))`,
-                border: "1px solid rgba(99, 102, 241, 0.2)",
-                boxShadow: "0 4px 20px rgba(99, 102, 241, 0.05)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: -20,
-                  right: -20,
-                  width: 80,
-                  height: 80,
-                  borderRadius: "50%",
-                  background: "rgba(99, 102, 241, 0.1)",
-                }}
-              />
-
-              <Box
-                display="flex"
-                alignItems="center"
-                justifyContent="space-between"
-                mb={1.5}
-                position="relative"
-              >
-                <Typography
-                  variant="caption"
-                  fontWeight="800"
-                  sx={{
-                    color: theme.palette.secondary.main,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Borrowed Overview
-                </Typography>
-                <ArrowCircleDownIcon
-                  sx={{
-                    color: theme.palette.secondary.main,
-                    fontSize: 24,
-                    opacity: 0.8,
-                  }}
-                />
-              </Box>
-
-              <Box
-                display="flex"
-                flexDirection="column"
-                gap={0.5}
-                position="relative"
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  Outstanding (To Pay)
-                </Typography>
-                <Typography
-                  variant="h4"
-                  fontWeight="800"
-                  sx={{
-                    color: theme.palette.secondary.main,
-                    mb: 1,
-                    textShadow: "0 2px 10px rgba(99,102,241,0.2)",
-                  }}
-                >
-                  ₹{summary.currentBorrowed.toLocaleString("en-IN")}
-                </Typography>
-
-                <Box
-                  display="flex"
-                  flexDirection="column"
-                  gap={0.5}
-                  sx={{
-                    mt: 1,
-                    pt: 1.5,
-                    borderTop: "1px dashed rgba(99, 102, 241, 0.2)",
-                  }}
-                >
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography
-                      variant="caption"
-                      sx={{ color: theme.palette.text.secondary }}
-                    >
-                      Total Volume
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      fontWeight="700"
-                      sx={{ color: theme.palette.text.primary }}
-                    >
-                      ₹{summary.totalBorrowed.toLocaleString("en-IN")}
-                    </Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography
-                      variant="caption"
-                      sx={{ color: theme.palette.text.secondary }}
-                    >
-                      Top: {topBorrowedPerson.name}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      fontWeight="700"
-                      sx={{ color: theme.palette.text.primary }}
-                    >
-                      ₹{topBorrowedPerson.amount.toLocaleString("en-IN")}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background:
-                  netBalance >= 0
-                    ? `linear-gradient(135deg, ${theme.palette.custom.netPositiveBoxBg}, rgba(168, 85, 247, 0.05))`
-                    : `linear-gradient(135deg, ${theme.palette.custom.errorBoxBg}, rgba(244, 63, 94, 0.05))`,
-                border:
-                  netBalance >= 0
-                    ? "1px solid rgba(168, 85, 247, 0.2)"
-                    : "1px solid rgba(244, 63, 94, 0.2)",
-                boxShadow:
-                  netBalance >= 0
-                    ? "0 4px 20px rgba(168, 85, 247, 0.05)"
-                    : "0 4px 20px rgba(244, 63, 94, 0.05)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: -20,
-                  right: -20,
-                  width: 80,
-                  height: 80,
-                  borderRadius: "50%",
-                  background:
-                    netBalance >= 0
-                      ? "rgba(168, 85, 247, 0.1)"
-                      : "rgba(244, 63, 94, 0.1)",
-                }}
-              />
-
-              <Box
-                display="flex"
-                alignItems="center"
-                justifyContent="space-between"
-                mb={1.5}
-                position="relative"
-              >
-                <Typography
-                  variant="caption"
-                  fontWeight="800"
-                  sx={{
-                    color:
-                      netBalance >= 0
-                        ? theme.palette.custom.netPositiveColor
-                        : theme.palette.error.main,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Net Balance
-                </Typography>
-                <BalanceIcon
-                  sx={{
-                    color:
-                      netBalance >= 0
-                        ? theme.palette.custom.netPositiveColor
-                        : theme.palette.error.main,
-                    fontSize: 24,
-                    opacity: 0.8,
-                  }}
-                />
-              </Box>
-
-              <Box
-                display="flex"
-                flexDirection="column"
-                gap={0.5}
-                position="relative"
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  Current Net Position
-                </Typography>
-                <Typography
-                  variant="h4"
-                  fontWeight="800"
-                  sx={{
-                    color:
-                      netBalance >= 0
-                        ? theme.palette.custom.netPositiveColor
-                        : theme.palette.error.main,
-                    mb: 1,
-                    textShadow:
-                      netBalance >= 0
-                        ? "0 2px 10px rgba(168,85,247,0.2)"
-                        : "0 2px 10px rgba(244,63,94,0.2)",
-                  }}
-                >
-                  ₹{Math.abs(netBalance).toLocaleString("en-IN")}
-                </Typography>
-
-                <Box
-                  display="flex"
-                  flexDirection="column"
-                  gap={0.5}
-                  sx={{
-                    mt: 1,
-                    pt: 1.5,
-                    borderTop:
-                      netBalance >= 0
-                        ? "1px dashed rgba(168, 85, 247, 0.2)"
-                        : "1px dashed rgba(244, 63, 94, 0.2)",
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{ color: theme.palette.text.secondary }}
-                  >
-                    {netBalance > 0
-                      ? "You are currently in surplus."
-                      : netBalance < 0
-                      ? "You currently owe more than lent."
-                      : "All settled up."}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    fontWeight="700"
-                    sx={{ color: theme.palette.text.primary }}
-                  >
-                    Status: {netBalance >= 0 ? "Net Positive" : "Net Negative"}
-                  </Typography>
-                </Box>
-              </Box>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        {/* QUICK STATS STRIP */}
-        <Grid container spacing={1.5} mb={2}>
-          <Grid item xs={6} sm={3}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 1.25,
-                borderRadius: 1,
-                backgroundColor: "rgba(15, 23, 42, 0.4)",
-                border: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Recorded Entries
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                fontWeight="800"
-                color="text.primary"
-              >
-                {totalCount} Transactions
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 1.25,
-                borderRadius: 1,
-                backgroundColor: "rgba(15, 23, 42, 0.4)",
-                border: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Average Tx Size
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                fontWeight="800"
-                color="text.primary"
-              >
-                ₹{avgTxAmount.toLocaleString("en-IN")}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 1.25,
-                borderRadius: 1,
-                backgroundColor: "rgba(15, 23, 42, 0.4)",
-                border: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Partial Payments
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                fontWeight="800"
-                color="info.main"
-              >
-                {partialPaymentsCount} (₹
-                {totalPartialPayments.toLocaleString("en-IN")})
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 1.25,
-                borderRadius: 1,
-                backgroundColor: "rgba(15, 23, 42, 0.4)",
-                border: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Active People
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                fontWeight="800"
-                color="secondary.main"
-              >
-                {activePeopleCount} People
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
 
         {/* MONTHLY BAR CHART VISUALIZATION */}
         <Box
           sx={{
-            p: 1.5,
+            p: { xs: 1.1, sm: 1.5 },
             borderRadius: 1,
             backgroundColor: theme.palette.custom.chartBg,
             border: "1px solid rgba(148, 163, 184, 0.1)",
-            mb: 2,
+            mb: { xs: 1.2, sm: 2 },
           }}
         >
           <Box
             display="flex"
             justifyContent="space-between"
             alignItems="center"
-            mb={1}
+            mb={0.5}
             flexWrap="wrap"
             gap={1}
           >
@@ -1024,13 +542,14 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 color: theme.palette.text.primary,
                 display: "flex",
                 alignItems: "center",
-                gap: 1,
+                gap: 0.8,
+                fontSize: { xs: "0.8rem", sm: "0.875rem" },
               }}
             >
               <BarChartIcon
-                sx={{ color: theme.palette.primary.main, fontSize: 18 }}
+                sx={{ color: theme.palette.primary.main, fontSize: 17 }}
               />
-              Monthly Cash Flow Trend ({chartData.length} Months)
+              Monthly Cash Flow ({chartData.length}M)
             </Typography>
             {hoveredData && (
               <Chip
@@ -1042,10 +561,11 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 )} | Borrowed ₹${hoveredData.borrowed.toLocaleString("en-IN")}`}
                 sx={{
                   fontWeight: 700,
-                  fontSize: "0.75rem",
+                  fontSize: "0.72rem",
                   backgroundColor: "rgba(99, 102, 241, 0.15)",
                   color: theme.palette.secondary.main,
                   border: "1px solid rgba(99, 102, 241, 0.3)",
+                  height: 22,
                 }}
               />
             )}
@@ -1054,14 +574,14 @@ function ReportsModal({ open, onClose, transactions = [] }) {
           {/* Chart Area */}
           <Box
             sx={{
-              height: { xs: 130, sm: 145 },
+              height: { xs: 110, sm: 145 },
               display: "flex",
               alignItems: "flex-end",
               justifyContent: "space-between",
               gap: { xs: 1, sm: 2 },
-              pt: 2.5,
+              pt: { xs: 1.5, sm: 2.5 },
               pb: 0.5,
-              px: { xs: 1, sm: 2 },
+              px: { xs: 0.5, sm: 2 },
               position: "relative",
               borderBottom: "2px solid rgba(148, 163, 184, 0.2)",
             }}
@@ -1189,11 +709,11 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                         sx={{
                           width: { xs: 10, sm: 22 },
                           height: `${borrowedHeight}%`,
-                          background: theme.palette.custom.secondaryGradient,
+                          background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
                           borderRadius: "4px 4px 0 0",
                           boxShadow:
                             d.borrowed > 0
-                              ? "0 0 10px rgba(99, 102, 241, 0.4)"
+                              ? "0 0 10px rgba(239, 68, 68, 0.4)"
                               : "none",
                           transition:
                             "height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
@@ -1268,7 +788,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                   width: 10,
                   height: 10,
                   borderRadius: "2px",
-                  backgroundColor: theme.palette.secondary.main,
+                  backgroundColor: "#ef4444",
                 }}
               />
               <Typography
@@ -1362,8 +882,8 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                             fontWeight="800"
                             sx={{
                               color: isLent
-                                ? theme.palette.primary.main
-                                : theme.palette.secondary.main,
+                                ? "#10b981"
+                                : "#ef4444",
                             }}
                           >
                             {isLent
@@ -1385,8 +905,8 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                             backgroundColor: "rgba(148, 163, 184, 0.1)",
                             "& .MuiLinearProgress-bar": {
                               backgroundColor: isLent
-                                ? theme.palette.primary.main
-                                : theme.palette.secondary.main,
+                                ? "#10b981"
+                                : "#ef4444",
                               borderRadius: 3,
                             },
                           }}

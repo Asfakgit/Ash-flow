@@ -426,8 +426,9 @@ function findUserByToken_(token) {
   if (!token) return null;
   const sheet = getUsersSheet_();
   const rows = sheet.getDataRange().getValues();
+  const cleanToken = String(token).trim();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][8]) === String(token)) {
+    if (String(rows[i][8]).trim() === cleanToken) {
       return {
         rowIndex: i + 1,
         id: rows[i][0],
@@ -830,12 +831,19 @@ function handleAdminSetPassword_(data) {
 }
 
 function handleUpdateAdminViewPermission_(data) {
-  const user = findUserByToken_(data.token);
+  let user = findUserByToken_(data.token);
+  if (!user && data.username) {
+    user = findUserByUsername_(data.username);
+  }
   if (!user || user.status !== "APPROVED") {
     return json_({ success: false, message: "Unauthorized or inactive session." });
   }
 
-  const allow = Boolean(data.allowAdminView);
+  const allow = Boolean(
+    data.allowAdminView === true ||
+    String(data.allowAdminView).toLowerCase() === "true" ||
+    String(data.allowAdminView).toUpperCase() === "YES"
+  );
   const sheet = getUsersSheet_();
   sheet.getRange(user.rowIndex, 11).setValue(allow ? "YES" : "NO");
 

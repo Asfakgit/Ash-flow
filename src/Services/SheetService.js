@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const SHEETS_API_URL =
   import.meta.env.VITE_SHEETS_API_URL ||
-  "https://script.google.com/macros/s/AKfycbzm0DyTMqtHNKVJhUPgZqTRwNVSUYaGQ0h-HVwz1b2B-UtlFGCG7U9JXCNyjRITo0hq/exec";
+  "https://script.google.com/macros/s/AKfycbxVZSbaxOUJYIum5CjkWq7Tv43HV3i8lZVQ9H-G9XTI0AK_JJgEBlTXMUwQkO6fZ0LM/exec";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -93,6 +93,7 @@ export const clearAuthSession = () => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem("isAuthenticated");
+    localStorage.removeItem("app_avatar_img");
 
     // 2. Completely wipe sessionStorage
     sessionStorage.clear();
@@ -149,7 +150,7 @@ const postRequest = (payload) => {
 // =======================
 export const getRowVal = (row, idx, prop, defaultVal = "") => {
   if (!row) return defaultVal;
-  const val =
+  let val =
     row[idx] !== undefined
       ? row[idx]
       : row[prop] !== undefined
@@ -161,7 +162,18 @@ export const getRowVal = (row, idx, prop, defaultVal = "") => {
       : row[prop.toUpperCase()] !== undefined
       ? row[prop.toUpperCase()]
       : defaultVal;
-  return val !== null && val !== undefined ? val : defaultVal;
+
+  if (val === null || val === undefined) return defaultVal;
+
+  // Sanitize corrupt values like "click" (from click event leak) in the type column
+  if (prop === "type" || idx === 3) {
+    const s = String(val).trim();
+    if (s.toLowerCase() === "click") {
+      return "Lent";
+    }
+  }
+
+  return val;
 };
 
 export const getDataRows = (transactions = []) => {
@@ -177,6 +189,7 @@ export const getDataRows = (transactions = []) => {
       const col5 = String(row[5] || "").toLowerCase().trim();
       const col6 = String(row[6] || "").toLowerCase().trim();
 
+      // Check for any header cells
       if (
         col0 === "id" ||
         col0 === "person" ||
@@ -185,20 +198,23 @@ export const getDataRows = (transactions = []) => {
         col3 === "type" ||
         col4 === "date" ||
         col5 === "notes" ||
-        col6 === "method"
+        col6 === "method" ||
+        col3 === "method" ||
+        col4 === "method"
       ) {
         return false;
       }
 
-      // Check if essentially empty or dummy header
+      // Check if essentially empty or dummy row
       if (!col0 && !col1 && !col2) return false;
+      if (col1 === "person") return false;
     } else if (typeof row === "object") {
       const idStr = String(row.id || "").toLowerCase().trim();
-      const personStr = String(row.person || "").toLowerCase().trim();
-      const typeStr = String(row.type || "").toLowerCase().trim();
-      const methodStr = String(row.method || row.paymentMethod || "").toLowerCase().trim();
-      const notesStr = String(row.notes || "").toLowerCase().trim();
-      const dateStr = String(row.date || "").toLowerCase().trim();
+      const personStr = String(row.person || row.Person || "").toLowerCase().trim();
+      const typeStr = String(row.type || row.Type || "").toLowerCase().trim();
+      const methodStr = String(row.method || row.Method || row.paymentMethod || "").toLowerCase().trim();
+      const notesStr = String(row.notes || row.Notes || "").toLowerCase().trim();
+      const dateStr = String(row.date || row.Date || "").toLowerCase().trim();
 
       if (
         idStr === "id" ||
@@ -336,7 +352,11 @@ export const loginUser = async (username, password) => {
       if (result.success && result.token) {
         setAuthToken(result.token);
         setAuthUser(result.user);
+        if (result.user?.avatar) {
+          setUserAvatar(result.user.avatar, result.user);
+        }
         localStorage.setItem("isAuthenticated", "true");
+        window.dispatchEvent(new Event("avatar_updated"));
         return { success: true, user: result.user, token: result.token };
       }
 
@@ -569,6 +589,249 @@ export const adminDeleteUser = async (targetUsername) => {
 };
 
 // =======================
+// PASSWORD RESET & SHEET PRIVACY APIS
+// =======================
+export const requestPasswordReset = async (username, newPassword) => {
+  const cleanUsername = String(username || "").trim().toLowerCase();
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "forgot_password",
+        username: cleanUsername,
+        newPassword: newPassword,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      return result;
+    }
+    throw new Error(result?.message || "Failed to submit password reset request.");
+  } catch (err) {
+    console.error("requestPasswordReset error:", err);
+    throw err;
+  }
+};
+
+export const adminApprovePasswordReset = async (targetUsername) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_approve_reset",
+        token: token,
+        targetUsername: String(targetUsername || "").trim().toLowerCase(),
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      return result;
+    }
+    throw new Error(result?.message || "Failed to approve password reset.");
+  } catch (err) {
+    console.error("adminApprovePasswordReset error:", err);
+    throw err;
+  }
+};
+
+export const adminSetUserPassword = async (targetUsername, newPassword) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_set_password",
+        token: token,
+        targetUsername: String(targetUsername || "").trim().toLowerCase(),
+        newPassword: newPassword,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      return result;
+    }
+    throw new Error(result?.message || "Failed to set user password.");
+  } catch (err) {
+    console.error("adminSetUserPassword error:", err);
+    throw err;
+  }
+};
+
+export const updateAdminViewPermission = async (allowAdminView) => {
+  const token = getAuthToken();
+  const curr = getAuthUser();
+  const allowBool = Boolean(allowAdminView);
+
+  // 1. Instantly update local session state
+  if (curr) {
+    curr.allowAdminView = allowBool;
+    setAuthUser(curr);
+    window.dispatchEvent(new Event("auth_user_updated"));
+  }
+
+  // 2. Sync to cloud backend
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "update_admin_view_permission",
+        token: token || "",
+        username: curr?.username || "",
+        allowAdminView: allowBool,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+        timeout: 9000,
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      if (curr) {
+        curr.allowAdminView = Boolean(result.allowAdminView !== undefined ? result.allowAdminView : allowBool);
+        setAuthUser(curr);
+        window.dispatchEvent(new Event("auth_user_updated"));
+      }
+      return result;
+    }
+    return { success: true, allowAdminView: allowBool };
+  } catch (err) {
+    console.warn("updateAdminViewPermission network sync issue (saved locally):", err);
+    return { success: true, allowAdminView: allowBool, offline: true };
+  }
+};
+
+// =======================
+// USER-ISOLATED AVATAR PROFILE HELPERS
+// =======================
+export const getUserAvatarKey = (user) => {
+  const target = user || getAuthUser();
+  const username = target?.username || (target?.id ? String(target.id) : null);
+  return username ? `app_avatar_img_${String(username).trim().toLowerCase()}` : null;
+};
+
+export const getUserAvatar = (user) => {
+  const target = user || getAuthUser();
+  if (!target) return null;
+  const key = getUserAvatarKey(target);
+  if (key) {
+    try {
+      const local = localStorage.getItem(key);
+      if (local) return local;
+    } catch {}
+  }
+  return target.avatar || null;
+};
+
+export const setUserAvatar = (avatarDataUrl, user) => {
+  const target = user || getAuthUser();
+  const key = getUserAvatarKey(target);
+  if (key) {
+    try {
+      if (avatarDataUrl) {
+        localStorage.setItem(key, avatarDataUrl);
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch (err) {
+      console.warn("Failed to write avatar to localStorage:", err);
+    }
+  }
+
+  // Remove any legacy global key so no avatar leaks across users
+  try {
+    localStorage.removeItem("app_avatar_img");
+  } catch {}
+
+  // Update cached auth user
+  const curr = getAuthUser();
+  if (curr && target && (curr.username === target.username || curr.id === target.id)) {
+    curr.avatar = avatarDataUrl || "";
+    setAuthUser(curr);
+  }
+
+  window.dispatchEvent(new Event("avatar_updated"));
+};
+
+export const updateUserProfileAvatar = async (avatarDataUrl) => {
+  const curr = getAuthUser();
+  setUserAvatar(avatarDataUrl, curr);
+
+  const token = getAuthToken();
+  if (token) {
+    try {
+      const res = await axios.post(
+        SHEETS_API_URL,
+        JSON.stringify({
+          action: "update_profile_avatar",
+          token: token,
+          avatar: avatarDataUrl || "",
+        }),
+        {
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          transformResponse: (raw) => normalizeResponseData(raw),
+          timeout: 8000,
+        }
+      );
+      return res.data;
+    } catch (err) {
+      console.warn("Could not sync avatar to cloud backend (saved locally):", err);
+    }
+  }
+  return { success: true };
+};
+
+export const adminGetUserTransactions = async (targetUsername) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_get_user_transactions",
+        token: token,
+        targetUsername: String(targetUsername || "").trim().toLowerCase(),
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      return result;
+    }
+    throw new Error(result?.message || "Failed to fetch user sheet transactions.");
+  } catch (err) {
+    console.error("adminGetUserTransactions error:", err);
+    throw err;
+  }
+};
+
+// =======================
 // GET ALL TRANSACTIONS (GOOGLE SHEETS + OFFLINE CACHE)
 // =======================
 export const getTransactions = async () => {
@@ -616,11 +879,21 @@ export const getTransactions = async () => {
 // ADD TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
 export const addTransaction = async (data) => {
+  const rawType = String(data.type || "").trim();
+  const normalizedType =
+    rawType.toLowerCase() === "borrowed" || rawType.toLowerCase() === "borrow"
+      ? "Borrowed"
+      : rawType.toLowerCase() === "partial payment" || rawType.toLowerCase() === "partial"
+      ? "Partial Payment"
+      : rawType.toLowerCase().includes("settled")
+      ? "Settled"
+      : "Lent"; // Defaults safely to "Lent" (fixes "click" event leak)
+
   const payload = {
     id: data.id || Date.now(),
     person: data.person,
     amount: data.amount,
-    type: data.type,
+    type: normalizedType,
     date: formatDateDisplay(data.date),
     notes: data.notes || "",
     method: data.method || "Cash",
@@ -662,9 +935,41 @@ export const updateTransaction = async (data) => {
   };
 
   const currentCache = getDataRows(getCachedTransactions());
-  const updatedCache = currentCache.map((item) =>
-    String(getRowVal(item, 0, "id")) === String(payload.id) ? { ...item, ...payload } : item
-  );
+  const updatedCache = currentCache.map((item) => {
+    if (String(getRowVal(item, 0, "id")) === String(payload.id)) {
+      if (Array.isArray(item)) {
+        const arr = [
+          payload.id,
+          payload.person,
+          payload.amount,
+          payload.type,
+          payload.date,
+          payload.notes,
+          payload.method,
+        ];
+        arr.id = payload.id;
+        arr.person = payload.person;
+        arr.amount = payload.amount;
+        arr.type = payload.type;
+        arr.date = payload.date;
+        arr.notes = payload.notes;
+        arr.method = payload.method;
+        return arr;
+      }
+      return {
+        ...item,
+        ...payload,
+        0: payload.id,
+        1: payload.person,
+        2: payload.amount,
+        3: payload.type,
+        4: payload.date,
+        5: payload.notes,
+        6: payload.method,
+      };
+    }
+    return item;
+  });
   setCachedTransactions(updatedCache);
 
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -684,23 +989,38 @@ export const updateTransaction = async (data) => {
 // =======================
 // DELETE TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
-export const deleteTransaction = async (id) => {
+export const deleteTransaction = async (id, extra = {}) => {
   const currentCache = getDataRows(getCachedTransactions());
-  const updatedCache = currentCache.filter(
-    (item) => String(getRowVal(item, 0, "id")) !== String(id)
-  );
+  const updatedCache = currentCache.filter((item) => {
+    const itemId = String(getRowVal(item, 0, "id", ""));
+    if (id !== undefined && id !== null && String(id).trim() !== "" && itemId === String(id).trim()) {
+      return false;
+    }
+    if (extra && extra.person) {
+      const p = String(getRowVal(item, 1, "person", "")).trim().toLowerCase();
+      if (p === String(extra.person).trim().toLowerCase()) return false;
+    }
+    return true;
+  });
   setCachedTransactions(updatedCache);
 
+  const payload = {
+    action: "delete",
+    id: id || 0,
+    person: extra?.person || "",
+    notes: extra?.notes || "",
+  };
+
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    addToOfflineQueue({ action: "delete", id });
+    addToOfflineQueue(payload);
     return { status: "success", offline: true };
   }
 
   try {
-    return await postRequest({ action: "delete", id });
+    return await postRequest(payload);
   } catch (err) {
     console.warn("Delete request failed, saved to offline queue:", err);
-    addToOfflineQueue({ action: "delete", id });
+    addToOfflineQueue(payload);
     return { status: "success", offline: true };
   }
 };
@@ -721,6 +1041,16 @@ export const getTodayForPicker = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
     now.getDate()
   ).padStart(2, "0")}`;
+};
+
+export const cleanNotesDisplay = (notes) => {
+  if (!notes) return "";
+  let s = String(notes);
+  s = s.replace(/\s*\(\s*ID\s*:\s*[^)]+\)/gi, "");
+  s = s.replace(/\s*\[\s*(?:ref|ID)\s*:\s*[^\]]+\]/gi, "");
+  s = s.replace(/\s*\(?\s*ID\s*:\s*[\w\d]+\s*\)?/gi, "");
+  s = s.replace(/\s*•\s*$/, "").replace(/^\s*•\s*/, "").trim();
+  return s;
 };
 
 export const getTodayDisplay = () => _formatDMY(new Date());
