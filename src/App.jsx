@@ -89,52 +89,6 @@ function App() {
     onConfirm: null,
   });
 
-  const triggerRefresh = () => {
-    setRefresh((prev) => !prev);
-  };
-
-  const handleLogin = (user) => {
-    localStorage.setItem("isAuthenticated", "true");
-    setIsAuthenticated(true);
-    setCurrentUser(user || getAuthUser());
-    triggerRefresh();
-  };
-
-  const handleLogout = () => {
-    showNotification({
-      type: "warning",
-      title: "Sign Out",
-      message: "Are you sure you want to sign out of your account?",
-      confirmText: "Sign Out",
-      cancelText: "Cancel",
-      onConfirm: async () => {
-        await logoutUser();
-        setIsAuthenticated(false);
-        setCurrentUser(null);
-        setTransactions([]);
-        setPendingUsersCount(0);
-        setReportsOpen(false);
-        setAdminUsersOpen(false);
-      },
-    });
-  };
-
-  // Poll or check pending users count when admin is logged in
-  useEffect(() => {
-    if (isAuthenticated && currentUser?.role === "ADMIN") {
-      adminGetUsers()
-        .then((res) => {
-          if (res.success && Array.isArray(res.users)) {
-            const pending = res.users.filter((u) => u.status === "PENDING").length;
-            setPendingUsersCount(pending);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [isAuthenticated, currentUser, refresh]);
-
-  const theme = useTheme();
-
   const showNotification = ({
     type = "success",
     title = "",
@@ -162,6 +116,56 @@ function App() {
   const closeNotification = () => {
     setNotification((prev) => ({ ...prev, open: false }));
   };
+
+
+
+  const triggerRefresh = () => {
+    setRefresh((prev) => !prev);
+  };
+
+  const handleLogin = (user) => {
+    localStorage.setItem("isAuthenticated", "true");
+    setIsAuthenticated(true);
+    setCurrentUser(user || getAuthUser());
+    triggerRefresh();
+  };
+
+  const handleLogout = () => {
+    showNotification({
+      type: "confirm",
+      title: "Sign Out",
+      message: "Are you sure you want to sign out of your account?",
+      confirmText: "Sign Out",
+      cancelText: "Cancel",
+      onConfirm: () => {
+        logoutUser();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setTransactions([]);
+        setPendingUsersCount(0);
+        setReportsOpen(false);
+        setAdminUsersOpen(false);
+      },
+    });
+  };
+
+  // Poll or check pending users count when admin is logged in
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === "ADMIN") {
+      adminGetUsers()
+        .then((res) => {
+          if (res.success && Array.isArray(res.users)) {
+            const pending = res.users.filter((u) => u.status === "PENDING").length;
+            setPendingUsersCount(pending);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated, currentUser, refresh]);
+
+  const theme = useTheme();
+
+
 
   const { transactions, setTransactions } = useTransactions(refresh);
 

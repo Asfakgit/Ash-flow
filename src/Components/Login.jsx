@@ -40,6 +40,20 @@ const Login = ({ onLogin }) => {
   const [infoMessage, setInfoMessage] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
+  const inputSx = {
+    mb: 2,
+    "& .MuiOutlinedInput-root": {
+      "& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus, & input:-webkit-autofill:active, & input:-internal-autofill-selected": {
+        WebkitBoxShadow: `0 0 0 1000px ${theme.palette.background.paper} inset !important`,
+        boxShadow: `0 0 0 1000px ${theme.palette.background.paper} inset !important`,
+        WebkitTextFillColor: `${theme.palette.text.primary} !important`,
+        caretColor: theme.palette.text.primary,
+        borderRadius: "inherit",
+        transition: "background-color 50000s ease-in-out 0s",
+      },
+    },
+  };
+
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
     setError('');
@@ -342,7 +356,7 @@ const Login = ({ onLogin }) => {
                         setInfoMessage('');
                       }}
                       disabled={loading}
-                      sx={{ mb: 2 }}
+                      sx={inputSx}
                       autoComplete="username"
                     />
 
@@ -359,7 +373,7 @@ const Login = ({ onLogin }) => {
                         setInfoMessage('');
                       }}
                       disabled={loading}
-                      sx={{ mb: 3 }}
+                      sx={{ ...inputSx, mb: 3 }}
                       autoComplete="current-password"
                       InputProps={{
                         endAdornment: (
@@ -436,7 +450,7 @@ const Login = ({ onLogin }) => {
                         setError('');
                       }}
                       disabled={loading}
-                      sx={{ mb: 2 }}
+                      sx={inputSx}
                       placeholder="e.g. John Doe"
                     />
 
@@ -451,7 +465,7 @@ const Login = ({ onLogin }) => {
                         setError('');
                       }}
                       disabled={loading}
-                      sx={{ mb: 2 }}
+                      sx={inputSx}
                       placeholder="e.g. johndoe or user@gmail.com"
                       helperText="Username or Google account email"
                     />
@@ -468,7 +482,7 @@ const Login = ({ onLogin }) => {
                         setError('');
                       }}
                       disabled={loading}
-                      sx={{ mb: 2 }}
+                      sx={inputSx}
                       helperText="Minimum 6 characters"
                       InputProps={{
                         endAdornment: (
@@ -501,7 +515,7 @@ const Login = ({ onLogin }) => {
                         setError('');
                       }}
                       disabled={loading}
-                      sx={{ mb: 3 }}
+                      sx={{ ...inputSx, mb: 3 }}
                     />
 
                     <Alert severity="info" sx={{ mb: 2.5, borderRadius: 2, fontSize: '0.8rem' }}>

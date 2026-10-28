@@ -113,79 +113,81 @@ function doPost(e) {
     // ==========================================
     // 3. TRANSACTION DATA ACTIONS (add, update, delete)
     // ==========================================
-    if (data.id === undefined || data.id === null || String(data.id).trim() === "") {
-      throw new Error("Transaction id is required.");
-    }
-
-    lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    lockAcquired = true;
-
-    // Backend strictly determines target user sheet from token
-    let sheetName = DEFAULT_TAB;
-    if (data.token) {
-      const user = findUserByToken_(data.token);
-      if (!user || user.status !== "APPROVED") {
-        return json_({
-          success: false,
-          error: "UNAUTHORIZED",
-          message: "Unauthorized or inactive account.",
-        });
-      }
-      sheetName =
-        user.sheetName ||
-        (user.role === "ADMIN" ? DEFAULT_TAB : "User_" + sanitizeSheetName_(user.username));
-    }
-
-    const sheet = getUserSheet_(sheetName);
-    const rows = sheet.getDataRange().getValues();
-    const rowIndex = rows.findIndex(
-      (row, index) => index > 0 && String(row[0]) === String(data.id)
-    );
-
-    if (action === "add") {
-      if (rowIndex !== -1) {
-        return json_({ success: true, message: "Transaction already exists." });
+    if (action === "add" || action === "update" || action === "delete") {
+      if (data.id === undefined || data.id === null || String(data.id).trim() === "") {
+        throw new Error("Transaction id is required.");
       }
 
-      sheet.appendRow([
-        data.id,
-        data.person || "",
-        data.amount || 0,
-        data.type || "",
-        data.date || "",
-        data.notes || "",
-        data.method || "Cash",
-      ]);
+      lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      lockAcquired = true;
 
-      return json_({ success: true, message: "Transaction added." });
-    }
-
-    if (action === "update") {
-      if (rowIndex === -1) {
-        return json_({ success: false, message: "Transaction not found." });
+      // Backend strictly determines target user sheet from token
+      let sheetName = DEFAULT_TAB;
+      if (data.token) {
+        const user = findUserByToken_(data.token);
+        if (!user || user.status !== "APPROVED") {
+          return json_({
+            success: false,
+            error: "UNAUTHORIZED",
+            message: "Unauthorized or inactive account.",
+          });
+        }
+        sheetName =
+          user.sheetName ||
+          (user.role === "ADMIN" ? DEFAULT_TAB : "User_" + sanitizeSheetName_(user.username));
       }
 
-      sheet.getRange(rowIndex + 1, 1, 1, HEADERS.length).setValues([[
-        data.id,
-        data.person || "",
-        data.amount || 0,
-        data.type || "",
-        data.date || "",
-        data.notes || "",
-        data.method || "Cash",
-      ]]);
+      const sheet = getUserSheet_(sheetName);
+      const rows = sheet.getDataRange().getValues();
+      const rowIndex = rows.findIndex(
+        (row, index) => index > 0 && String(row[0]) === String(data.id)
+      );
 
-      return json_({ success: true, message: "Transaction updated." });
-    }
+      if (action === "add") {
+        if (rowIndex !== -1) {
+          return json_({ success: true, message: "Transaction already exists." });
+        }
 
-    if (action === "delete") {
-      if (rowIndex === -1) {
-        return json_({ success: false, message: "Transaction not found." });
+        sheet.appendRow([
+          data.id,
+          data.person || "",
+          data.amount || 0,
+          data.type || "",
+          data.date || "",
+          data.notes || "",
+          data.method || "Cash",
+        ]);
+
+        return json_({ success: true, message: "Transaction added." });
       }
 
-      sheet.deleteRow(rowIndex + 1);
-      return json_({ success: true, message: "Transaction deleted." });
+      if (action === "update") {
+        if (rowIndex === -1) {
+          return json_({ success: false, message: "Transaction not found." });
+        }
+
+        sheet.getRange(rowIndex + 1, 1, 1, HEADERS.length).setValues([[
+          data.id,
+          data.person || "",
+          data.amount || 0,
+          data.type || "",
+          data.date || "",
+          data.notes || "",
+          data.method || "Cash",
+        ]]);
+
+        return json_({ success: true, message: "Transaction updated." });
+      }
+
+      if (action === "delete") {
+        if (rowIndex === -1) {
+          return json_({ success: false, message: "Transaction not found." });
+        }
+
+        sheet.deleteRow(rowIndex + 1);
+        return json_({ success: true, message: "Transaction deleted." });
+      }
     }
 
     return json_({ success: false, message: "Invalid action." });
@@ -530,7 +532,7 @@ function handleAdminUpdateStatus_(data) {
   const targetUsername = String(data.targetUsername || "").trim().toLowerCase();
   const newStatus = String(data.newStatus || "").toUpperCase();
 
-  if (!["APPROVED", "REJECTED", "DISABLED"].includes(newStatus)) {
+  if (!["APPROVED", "REJECTED", "DISABLED", "DELETED"].includes(newStatus)) {
     return json_({ success: false, message: "Invalid status value: " + newStatus });
   }
 
@@ -540,7 +542,11 @@ function handleAdminUpdateStatus_(data) {
   }
 
   if (targetUser.username === adminUser.username && newStatus !== "APPROVED") {
-    return json_({ success: false, message: "You cannot disable or reject your own admin account." });
+    return json_({ success: false, message: "You cannot disable, reject, or delete your own admin account." });
+  }
+
+  if (newStatus === "DELETED") {
+    return handleAdminDeleteUser_(data);
   }
 
   const sheet = getUsersSheet_();

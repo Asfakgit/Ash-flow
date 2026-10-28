@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const SHEETS_API_URL =
   import.meta.env.VITE_SHEETS_API_URL ||
-  "https://script.google.com/macros/s/AKfycby7cfmrdIMoClM7IlvjexB_y1PEqFNvKjI2T_VJGsepIjxys6NZxMP45PT7NrUiJixi/exec";
+  "https://script.google.com/macros/s/AKfycbzm0DyTMqtHNKVJhUPgZqTRwNVSUYaGQ0h-HVwz1b2B-UtlFGCG7U9JXCNyjRITo0hq/exec";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -173,22 +173,44 @@ export const getDataRows = (transactions = []) => {
       const col1 = String(row[1] || "").toLowerCase().trim();
       const col2 = String(row[2] || "").toLowerCase().trim();
       const col3 = String(row[3] || "").toLowerCase().trim();
+      const col4 = String(row[4] || "").toLowerCase().trim();
+      const col5 = String(row[5] || "").toLowerCase().trim();
+      const col6 = String(row[6] || "").toLowerCase().trim();
+
       if (
         col0 === "id" ||
-        col1 === "person" ||
         col0 === "person" ||
+        col1 === "person" ||
         col2 === "amount" ||
-        col3 === "type"
+        col3 === "type" ||
+        col4 === "date" ||
+        col5 === "notes" ||
+        col6 === "method"
       ) {
         return false;
       }
+
+      // Check if essentially empty or dummy header
+      if (!col0 && !col1 && !col2) return false;
     } else if (typeof row === "object") {
       const idStr = String(row.id || "").toLowerCase().trim();
       const personStr = String(row.person || "").toLowerCase().trim();
       const typeStr = String(row.type || "").toLowerCase().trim();
-      if (idStr === "id" || personStr === "person" || typeStr === "type") {
+      const methodStr = String(row.method || row.paymentMethod || "").toLowerCase().trim();
+      const notesStr = String(row.notes || "").toLowerCase().trim();
+      const dateStr = String(row.date || "").toLowerCase().trim();
+
+      if (
+        idStr === "id" ||
+        personStr === "person" ||
+        typeStr === "type" ||
+        methodStr === "method" ||
+        notesStr === "notes" ||
+        dateStr === "date"
+      ) {
         return false;
       }
+      if (!personStr && !row.amount) return false;
     }
     return true;
   });
@@ -212,7 +234,8 @@ const getQueueKey = () => {
 export const getCachedTransactions = () => {
   try {
     const raw = localStorage.getItem(getCacheKey());
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return getDataRows(parsed);
   } catch (err) {
     console.error("Failed to read cache:", err);
     return [];
@@ -488,13 +511,16 @@ export const adminDeleteUser = async (targetUsername) => {
   const token = getAuthToken();
   if (!token) throw new Error("Authentication token required");
 
+  const cleanTarget = String(targetUsername || "").trim().toLowerCase();
+
   try {
     const res = await axios.post(
       SHEETS_API_URL,
       JSON.stringify({
         action: "admin_delete_user",
         token: token,
-        targetUsername: targetUsername,
+        targetUsername: cleanTarget,
+        id: 0,
       }),
       {
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -510,7 +536,32 @@ export const adminDeleteUser = async (targetUsername) => {
       };
     }
 
-    throw new Error(result?.message || "Failed to delete user");
+    // Fallback: try admin_update_user_status with DELETED
+    const fallbackRes = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_update_user_status",
+        token: token,
+        targetUsername: cleanTarget,
+        newStatus: "DELETED",
+        id: 0,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+      }
+    );
+
+    if (fallbackRes.data && fallbackRes.data.success) {
+      return {
+        success: true,
+        message: fallbackRes.data.message || "User deleted.",
+      };
+    }
+
+    throw new Error(
+      result?.message || fallbackRes.data?.message || "Failed to delete user"
+    );
   } catch (err) {
     console.error("adminDeleteUser error:", err);
     throw err;
