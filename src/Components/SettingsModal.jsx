@@ -7,7 +7,6 @@ import {
   Slide,
   IconButton,
   Button,
-  Switch,
   CircularProgress,
   Avatar,
   Chip,
@@ -18,8 +17,6 @@ import { useTheme } from "@mui/material/styles";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CloudSyncIcon from "@mui/icons-material/CloudSync";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
@@ -27,7 +24,6 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import { ThemeContext } from "../ThemeContext";
 import {
-  updateAdminViewPermission,
   getAuthUser,
   syncOfflineQueue,
   getCachedTransactions,
@@ -104,21 +100,10 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
   const userObj = currentUser || getAuthUser();
   const isAdmin = userObj?.role === "ADMIN";
 
-  const isAllowView = (u) => {
-    if (!u) return false;
-    return Boolean(
-      u.allowAdminView === true ||
-      String(u.allowAdminView).toLowerCase() === "true" ||
-      String(u.allowAdminView).toUpperCase() === "YES"
-    );
-  };
-
   // User-isolated avatar state
   const [avatarImage, setAvatarImage] = useState(() => getUserAvatar(userObj));
 
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [allowAdminView, setAllowAdminView] = useState(() => isAllowView(userObj));
-  const [privacyLoading, setPrivacyLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState("");
   const [showStory, setShowStory] = useState(false);
@@ -127,19 +112,9 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
     if (open) {
       const u = getAuthUser() || currentUser;
       setAvatarImage(getUserAvatar(u));
-      setAllowAdminView(isAllowView(u));
       setSyncStatus("");
     }
   }, [open, currentUser]);
-
-  useEffect(() => {
-    const handleUserUpdate = () => {
-      const u = getAuthUser() || currentUser;
-      setAllowAdminView(isAllowView(u));
-    };
-    window.addEventListener("auth_user_updated", handleUserUpdate);
-    return () => window.removeEventListener("auth_user_updated", handleUserUpdate);
-  }, [currentUser]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -165,20 +140,6 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
       await updateUserProfileAvatar(null);
     } catch (err) {
       console.error("Failed to remove avatar:", err);
-    }
-  };
-
-  const handleTogglePrivacy = async (e) => {
-    const newVal = e.target.checked;
-    setAllowAdminView(newVal);
-    setPrivacyLoading(true);
-    try {
-      await updateAdminViewPermission(newVal);
-      if (userObj) userObj.allowAdminView = newVal;
-    } catch (err) {
-      console.warn("Privacy toggle error:", err);
-    } finally {
-      setPrivacyLoading(false);
     }
   };
 
@@ -610,61 +571,6 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
               overflow: "hidden",
             }}
           >
-            {/* Privacy Row */}
-            <Box
-              sx={{
-                px: 2,
-                py: 1.4,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderBottom: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <Box display="flex" alignItems="center" gap={1.2}>
-                {allowAdminView ? (
-                  <VisibilityOutlinedIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
-                ) : (
-                  <LockOutlinedIcon sx={{ fontSize: 18, color: "#FF9F0A" }} />
-                )}
-                <Box>
-                  <Typography variant="body2" fontWeight="600" sx={{ fontSize: "0.88rem" }}>
-                    Admin Sheet View
-                  </Typography>
-                  {!isAdmin && (
-                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: "0.72rem", display: "block" }}>
-                      {allowAdminView ? "Enabled: Admin can view your records" : "Disabled: Only you can view your transactions"}
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-
-              {isAdmin ? (
-                <Chip
-                  size="small"
-                  label="Full Master"
-                  sx={{
-                    height: 22,
-                    fontSize: "0.68rem",
-                    fontWeight: 800,
-                    bgcolor: `${theme.palette.primary.main}18`,
-                    color: theme.palette.primary.main,
-                  }}
-                />
-              ) : (
-                <Box display="flex" alignItems="center" gap={0.8}>
-                  {privacyLoading && <CircularProgress size={16} />}
-                  <Switch
-                    checked={allowAdminView}
-                    onChange={handleTogglePrivacy}
-                    disabled={privacyLoading}
-                    size="small"
-                    color="primary"
-                  />
-                </Box>
-              )}
-            </Box>
-
             {/* Cloud Sync Row */}
             <Box
               sx={{
@@ -747,7 +653,7 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
               mt: 0.3,
             }}
           >
-            Crafted with <FavoriteIcon sx={{ fontSize: 12, color: "#FF2D55" }} /> by Ashfak
+            Crafted with by Ashfak
           </Typography>
 
         </Box>

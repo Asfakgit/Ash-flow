@@ -8,7 +8,6 @@ import {
   Paper,
   Tooltip,
   Zoom,
-  Switch,
   CircularProgress,
 } from "@mui/material";
 import { forwardRef, useState, useEffect, useRef } from "react";
@@ -17,10 +16,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import SecurityIcon from "@mui/icons-material/Security";
-import LockIcon from "@mui/icons-material/Lock";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useTheme } from "@mui/material/styles";
-import { updateAdminViewPermission, getAuthUser, getUserAvatar, updateUserProfileAvatar } from "../Services/SheetService";
+import { getAuthUser, getUserAvatar, updateUserProfileAvatar } from "../Services/SheetService";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -105,36 +102,6 @@ function AppInfoModal({ open, onClose, currentUser }) {
 
   const userObj = currentUser || getAuthUser();
   const isAdmin = userObj?.role === "ADMIN";
-
-  const [allowAdminView, setAllowAdminView] = useState(() => {
-    return Boolean(userObj?.allowAdminView);
-  });
-  const [privacyLoading, setPrivacyLoading] = useState(false);
-  const [privacyMessage, setPrivacyMessage] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      const active = currentUser || getAuthUser();
-      setAllowAdminView(Boolean(active?.allowAdminView));
-      setPrivacyMessage("");
-    }
-  }, [open, currentUser]);
-
-  const handleTogglePrivacy = async (e) => {
-    const newVal = e.target.checked;
-    setAllowAdminView(newVal);
-    setPrivacyLoading(true);
-    setPrivacyMessage("");
-    try {
-      const res = await updateAdminViewPermission(newVal);
-      setPrivacyMessage(res.message || (newVal ? "Sheet shared with Admin." : "Sheet set to private."));
-    } catch (err) {
-      setAllowAdminView(!newVal);
-      setPrivacyMessage(err.message || "Failed to update permission.");
-    } finally {
-      setPrivacyLoading(false);
-    }
-  };
 
   const [avatarImage, setAvatarImage] = useState(() => getUserAvatar(userObj));
 
@@ -449,80 +416,6 @@ function AppInfoModal({ open, onClose, currentUser }) {
             experience.
           </Typography>
         </Paper>
-
-        {/* Privacy & Admin Sheet Access Settings (For Regular Users) */}
-        {!isAdmin && (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2.2,
-              mt: 2,
-              borderRadius: 1.5,
-              background: theme.palette.custom.cardGradient,
-              border: `1px solid ${theme.palette.divider}`,
-              textAlign: "left",
-              boxShadow: theme.palette.custom.paperShadow,
-            }}
-          >
-            <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-              <Box display="flex" alignItems="center" gap={1}>
-                {allowAdminView ? (
-                  <VisibilityIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
-                ) : (
-                  <LockIcon sx={{ color: theme.palette.warning.main, fontSize: 20 }} />
-                )}
-                <Typography
-                  variant="subtitle2"
-                  fontWeight="800"
-                  sx={{
-                    color: theme.palette.text.primary,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  Admin Sheet Access
-                </Typography>
-              </Box>
-
-              <Box display="flex" alignItems="center" gap={0.5}>
-                {privacyLoading && <CircularProgress size={18} />}
-                <Switch
-                  checked={allowAdminView}
-                  onChange={handleTogglePrivacy}
-                  disabled={privacyLoading}
-                  color="primary"
-                  size="small"
-                />
-              </Box>
-            </Box>
-
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: "block", lineHeight: 1.5, fontSize: "0.78rem" }}
-            >
-              {allowAdminView
-                ? "Your Google Sheet records can be inspected by the administrator."
-                : "Your Google Sheet records are strictly private. The administrator cannot view your transactions."}
-            </Typography>
-
-            {privacyMessage && (
-              <Typography
-                variant="caption"
-                sx={{
-                  display: "block",
-                  mt: 1,
-                  fontWeight: 600,
-                  color: allowAdminView
-                    ? theme.palette.primary.main
-                    : theme.palette.warning.main,
-                  fontSize: "0.74rem",
-                }}
-              >
-                {privacyMessage}
-              </Typography>
-            )}
-          </Paper>
-        )}
       </DialogContent>
     </Dialog>
   );
