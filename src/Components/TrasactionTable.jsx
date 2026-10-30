@@ -28,12 +28,20 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import ManageHistoryIcon from "@mui/icons-material/ManageHistory";
+import TransactionAuditModal from "./TransactionAuditModal";
+import EditTransactionModal from "./EditTransactionModal";
 
 function Transactions({
   transactions,
+  setTransactions,
+  triggerRefresh,
+  showNotification,
 }) {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTxForAudit, setSelectedTxForAudit] = useState(null);
+  const [selectedTxForEdit, setSelectedTxForEdit] = useState(null);
   const desktopScrollRef = useRef(null);
   const mobileScrollRef = useRef(null);
 
@@ -201,13 +209,14 @@ function Transactions({
                   <TableCell sx={{ py: 1 }}>Method</TableCell>
                   <TableCell sx={{ py: 1 }}>Date</TableCell>
                   <TableCell sx={{ py: 1 }}>Notes</TableCell>
+                  <TableCell align="right" sx={{ py: 1, pr: 2 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
 
               <TableBody>
                 {filteredRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                       <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
                         No transactions found.
                       </Typography>
@@ -239,7 +248,9 @@ function Transactions({
                     return (
                       <TableRow
                         key={idVal || index}
+                        onClick={() => setSelectedTxForAudit(row)}
                         sx={{
+                          cursor: "pointer",
                           transition: "background-color 0.15s",
                           "&:hover": {
                             backgroundColor: theme.palette.divider,
@@ -406,6 +417,29 @@ function Transactions({
                             );
                           })()}
                         </TableCell>
+                        <TableCell align="right" sx={{ py: 0.5, pr: 1.5 }}>
+                          <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                            <Tooltip title="View Audit History" arrow>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedTxForAudit(row);
+                                }}
+                                sx={{
+                                  color: theme.palette.text.secondary,
+                                  p: 0.5,
+                                  "&:hover": {
+                                    color: "#10b981",
+                                    backgroundColor: "rgba(16, 185, 129, 0.12)",
+                                  },
+                                }}
+                              >
+                                <ManageHistoryIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
                       </TableRow>
                     );
                   })
@@ -477,6 +511,7 @@ function Transactions({
                 <Paper
                   key={idVal || index}
                   elevation={0}
+                  onClick={() => setSelectedTxForAudit(row)}
                   sx={{
                     px: 1.2,
                     py: 0.5,
@@ -485,7 +520,8 @@ function Transactions({
                     border: `1px solid ${theme.palette.divider}`,
                     width: "100%",
                     boxSizing: "border-box",
-                    transition: "border-color 0.2s",
+                    cursor: "pointer",
+                    transition: "border-color 0.2s, background-color 0.15s",
                     "&:active": {
                       borderColor: theme.palette.primary.main,
                     },
@@ -609,6 +645,24 @@ function Transactions({
                         {formatDateDisplay(dateVal)}
                       </Typography>
                     </Box>
+
+                    {/* Mobile Action Buttons: History & Edit */}
+                    <Box display="flex" alignItems="center" gap={0.4}>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTxForAudit(row);
+                        }}
+                        sx={{
+                          p: 0.4,
+                          color: theme.palette.text.secondary,
+                          "&:hover": { color: "#10b981" },
+                        }}
+                      >
+                        <ManageHistoryIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Box>
                   </Box>
 
                   {/* Bottom row: Notes if available */}
@@ -668,6 +722,43 @@ function Transactions({
           </Stack>
         )}
       </Box>
+
+      {/* Transaction Audit History Modal */}
+      <TransactionAuditModal
+        open={Boolean(selectedTxForAudit)}
+        onClose={() => setSelectedTxForAudit(null)}
+        transaction={selectedTxForAudit}
+        onEdit={(tx) => setSelectedTxForEdit(tx)}
+      />
+
+      {/* Edit Transaction Modal with Reason & Audit History Confirmation */}
+      <EditTransactionModal
+        open={Boolean(selectedTxForEdit)}
+        onClose={() => setSelectedTxForEdit(null)}
+        transaction={selectedTxForEdit}
+        transactions={transactions}
+        setTransactions={setTransactions}
+        onSuccess={(msg) => {
+          setSelectedTxForEdit(null);
+          if (showNotification) {
+            showNotification({
+              type: "success",
+              title: "Transaction Updated",
+              message: msg || "Transaction and audit record saved successfully.",
+            });
+          }
+          if (triggerRefresh) triggerRefresh();
+        }}
+        onError={(err) => {
+          if (showNotification) {
+            showNotification({
+              type: "error",
+              title: "Update Error",
+              message: err,
+            });
+          }
+        }}
+      />
     </Box>
   );
 }

@@ -28,7 +28,10 @@ import HistoryIcon from "@mui/icons-material/History";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ManageHistoryIcon from "@mui/icons-material/ManageHistory";
 import soundEffects from "../Services/soundEffects";
+import TransactionAuditModal from "./TransactionAuditModal";
+import EditTransactionModal from "./EditTransactionModal";
 import {
   getRowVal,
   getDataRows,
@@ -50,6 +53,8 @@ function PersonBalance({
   const theme = useTheme();
   const [balances, setBalances] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
+  const [selectedTxForAudit, setSelectedTxForAudit] = useState(null);
+  const [selectedTxForEdit, setSelectedTxForEdit] = useState(null);
 
   // Compute full transaction history for selected person
   const personHistory = useMemo(() => {
@@ -1167,10 +1172,12 @@ function PersonBalance({
               return (
                 <Box
                   key={getRowVal(row, 0, "id", idx)}
+                  onClick={() => setSelectedTxForAudit(row)}
                   sx={{
                     py: { xs: 0.85, sm: 1.1 },
                     px: { xs: 1.3, sm: 1.6 },
                     borderRadius: "8px",
+                    cursor: "pointer",
                     backgroundColor:
                       theme.palette.mode === "dark"
                         ? "rgba(255, 255, 255, 0.025)"
@@ -1276,61 +1283,80 @@ function PersonBalance({
                         : `${isLent ? "+" : isBorrowed ? "-" : ""}₹${amt.toLocaleString("en-IN")}`}
                     </Typography>
 
-                    {isClosed ? (
-                      <Chip
-                        label="Closed"
-                        size="small"
-                        sx={{
-                          height: 18,
-                          fontSize: "0.62rem",
-                          fontWeight: 700,
-                          bgcolor: "rgba(148, 163, 184, 0.12)",
-                          color: "#94a3b8",
-                          border: "1px solid rgba(148, 163, 184, 0.22)",
-                          borderRadius: "4px",
-                        }}
-                      />
-                    ) : (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCloseSingleTransaction(row);
-                        }}
-                        sx={{
-                          height: 20,
-                          minWidth: 46,
-                          px: 0.8,
-                          fontSize: "0.64rem",
-                          fontWeight: 700,
-                          textTransform: "none",
-                          borderRadius: "5px",
-                          color: badgeColor,
-                          borderColor: isLent
-                            ? "rgba(16, 185, 129, 0.35)"
-                            : isBorrowed
-                            ? "rgba(239, 68, 68, 0.35)"
-                            : "rgba(10, 132, 255, 0.35)",
-                          bgcolor: isLent
-                            ? "rgba(16, 185, 129, 0.08)"
-                            : isBorrowed
-                            ? "rgba(239, 68, 68, 0.08)"
-                            : "rgba(10, 132, 255, 0.08)",
-                          transition: "all 0.15s ease",
-                          "&:hover": {
-                            bgcolor: isLent
-                              ? "rgba(16, 185, 129, 0.22)"
+                    <Box display="flex" alignItems="center" gap={0.4}>
+                      <Tooltip title="View Audit History" arrow>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTxForAudit(row);
+                          }}
+                          sx={{
+                            p: 0.3,
+                            color: theme.palette.text.secondary,
+                            "&:hover": { color: "#10b981" },
+                          }}
+                        >
+                          <ManageHistoryIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+
+                      {isClosed ? (
+                        <Chip
+                          label="Closed"
+                          size="small"
+                          sx={{
+                            height: 18,
+                            fontSize: "0.62rem",
+                            fontWeight: 700,
+                            bgcolor: "rgba(148, 163, 184, 0.12)",
+                            color: "#94a3b8",
+                            border: "1px solid rgba(148, 163, 184, 0.22)",
+                            borderRadius: "4px",
+                          }}
+                        />
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCloseSingleTransaction(row);
+                          }}
+                          sx={{
+                            height: 20,
+                            minWidth: 46,
+                            px: 0.8,
+                            fontSize: "0.64rem",
+                            fontWeight: 700,
+                            textTransform: "none",
+                            borderRadius: "5px",
+                            color: badgeColor,
+                            borderColor: isLent
+                              ? "rgba(16, 185, 129, 0.35)"
                               : isBorrowed
-                              ? "rgba(239, 68, 68, 0.22)"
-                              : "rgba(10, 132, 255, 0.22)",
-                            borderColor: badgeColor,
-                          },
-                        }}
-                      >
-                        Close
-                      </Button>
-                    )}
+                              ? "rgba(239, 68, 68, 0.35)"
+                              : "rgba(10, 132, 255, 0.35)",
+                            bgcolor: isLent
+                              ? "rgba(16, 185, 129, 0.08)"
+                              : isBorrowed
+                              ? "rgba(239, 68, 68, 0.08)"
+                              : "rgba(10, 132, 255, 0.08)",
+                            transition: "all 0.15s ease",
+                            "&:hover": {
+                              bgcolor: isLent
+                                ? "rgba(16, 185, 129, 0.22)"
+                                : isBorrowed
+                                ? "rgba(239, 68, 68, 0.22)"
+                                : "rgba(10, 132, 255, 0.22)",
+                              borderColor: badgeColor,
+                            },
+                          }}
+                        >
+                          Close
+                        </Button>
+                      )}
+                    </Box>
                   </Box>
                 </Box>
               );
@@ -1339,6 +1365,43 @@ function PersonBalance({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Transaction Audit History Modal */}
+    <TransactionAuditModal
+      open={Boolean(selectedTxForAudit)}
+      onClose={() => setSelectedTxForAudit(null)}
+      transaction={selectedTxForAudit}
+      onEdit={(tx) => setSelectedTxForEdit(tx)}
+    />
+
+    {/* Edit Transaction Modal with Reason & Audit History Confirmation */}
+    <EditTransactionModal
+      open={Boolean(selectedTxForEdit)}
+      onClose={() => setSelectedTxForEdit(null)}
+      transaction={selectedTxForEdit}
+      transactions={transactions}
+      setTransactions={setTransactions}
+      onSuccess={(msg) => {
+        setSelectedTxForEdit(null);
+        if (showNotification) {
+          showNotification({
+            type: "success",
+            title: "Transaction Updated",
+            message: msg || "Transaction and audit record saved successfully.",
+          });
+        }
+        if (triggerRefresh) triggerRefresh();
+      }}
+      onError={(err) => {
+        if (showNotification) {
+          showNotification({
+            type: "error",
+            title: "Update Error",
+            message: err,
+          });
+        }
+      }}
+    />
     </>
   );
 }

@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const SHEETS_API_URL =
   import.meta.env.VITE_SHEETS_API_URL ||
-  "https://script.google.com/macros/s/AKfycbxVZSbaxOUJYIum5CjkWq7Tv43HV3i8lZVQ9H-G9XTI0AK_JJgEBlTXMUwQkO6fZ0LM/exec";
+  "https://script.google.com/macros/s/AKfycbybd9A5GKRU4l01NhtwCEAKN2GAh-5qXN8limZE4l19UWmLsZi978ik8qNpWotUSpNI/exec";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -241,10 +241,198 @@ const getCacheKey = () => {
   return `money_app_transactions_cache_${id}`;
 };
 
+export const AUDIT_FEATURE_START_DATE = "30 October 2026";
+
 const getQueueKey = () => {
   const user = getAuthUser();
   const id = user?.username ? String(user.username).toLowerCase() : "default";
   return `money_app_offline_queue_${id}`;
+};
+
+export const getAuditStorageKey = (username = null) => {
+  const user = username ? { username } : getAuthUser();
+  const id = user?.username ? String(user.username).toLowerCase() : "default";
+  return `money_app_audit_records_${id}`;
+};
+
+export const getAuditQueueKey = (username = null) => {
+  const user = username ? { username } : getAuthUser();
+  const id = user?.username ? String(user.username).toLowerCase() : "default";
+  return `money_app_audit_queue_${id}`;
+};
+
+export const getLocalAuditRecords = (transactionId = null, username = null) => {
+  try {
+    const raw = localStorage.getItem(getAuditStorageKey(username));
+    const records = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(records)) return [];
+    if (
+      transactionId !== null &&
+      transactionId !== undefined &&
+      String(transactionId).trim() !== ""
+    ) {
+      return records.filter(
+        (r) => String(r.transactionId) === String(transactionId)
+      );
+    }
+    return records;
+  } catch (err) {
+    console.error("Failed to read audit records from localStorage:", err);
+    return [];
+  }
+};
+
+export const saveLocalAuditRecords = (records = [], username = null) => {
+  try {
+    localStorage.setItem(getAuditStorageKey(username), JSON.stringify(records));
+  } catch (err) {
+    console.error("Failed to write audit records to localStorage:", err);
+  }
+};
+
+export const getAuditOfflineQueue = (username = null) => {
+  try {
+    const raw = localStorage.getItem(getAuditQueueKey(username));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveAuditOfflineQueue = (queue = [], username = null) => {
+  try {
+    localStorage.setItem(getAuditQueueKey(username), JSON.stringify(queue));
+  } catch (err) {
+    console.error("Failed to save audit offline queue:", err);
+  }
+};
+
+export const addToAuditOfflineQueue = (item, username = null) => {
+  const queue = getAuditOfflineQueue(username);
+  if (!queue.some((q) => q.auditId === item.auditId)) {
+    queue.push(item);
+    saveAuditOfflineQueue(queue, username);
+  }
+};
+
+export const recordAudit = async ({
+  transactionId,
+  action = "CREATE",
+  previousValues = null,
+  updatedValues = {},
+  reason = "",
+  userId = null,
+  timestamp = null,
+  auditId = null,
+}) => {
+  const user = getAuthUser();
+  const currentUserId = userId || user?.username || "ashflow";
+  const finalAuditId =
+    auditId ||
+    `audit_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const finalTimestamp = timestamp || new Date().toISOString();
+
+  const auditEntry = {
+    auditId: finalAuditId,
+    transactionId: String(transactionId),
+    action: String(action).toUpperCase(), // 'CREATE' | 'UPDATE'
+    previousValues: previousValues ? { ...previousValues } : null,
+    updatedValues: updatedValues ? { ...updatedValues } : {},
+    timestamp: finalTimestamp,
+    userId: currentUserId,
+    reason: String(
+      reason ||
+        (action === "CREATE"
+          ? "Initial transaction record"
+          : "Transaction modified")
+    ).trim(),
+  };
+
+  // 1. Atomic Local Storage update
+  const existingAudits = getLocalAuditRecords(null, currentUserId);
+  const exists = existingAudits.some((a) => a.auditId === finalAuditId);
+  if (!exists) {
+    const updated = [auditEntry, ...existingAudits];
+    saveLocalAuditRecords(updated, currentUserId);
+  }
+
+  // 2. Offline-first Sync to Google Sheets
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    addToAuditOfflineQueue(auditEntry, currentUserId);
+    return { success: true, offline: true, audit: auditEntry };
+  }
+
+  try {
+    await postRequest({ action: "audit_add", ...auditEntry });
+    return { success: true, offline: false, audit: auditEntry };
+  } catch (err) {
+    console.warn("Audit postRequest failed, saving to audit queue:", err);
+    addToAuditOfflineQueue(auditEntry, currentUserId);
+    return { success: true, offline: true, audit: auditEntry };
+  }
+};
+
+export const getAuditHistoryForTransaction = async (transactionId) => {
+  if (!transactionId) return [];
+  const user = getAuthUser();
+  const currentUserId = user?.username
+    ? String(user.username).toLowerCase()
+    : "default";
+
+  // 1. Read local records first (offline-first instant response)
+  const localList = getLocalAuditRecords(transactionId, currentUserId);
+
+  // 2. If online, fetch from Google Sheets and merge without duplicate entries
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    try {
+      const res = await postRequest({
+        action: "audit_get",
+        transactionId: String(transactionId),
+        userId: currentUserId,
+      });
+
+      if (res && res.data && Array.isArray(res.data.audits)) {
+        const remoteAudits = res.data.audits;
+        const allLocal = getLocalAuditRecords(null, currentUserId);
+        const map = new Map();
+
+        // Put all local
+        allLocal.forEach((a) => map.set(a.auditId, a));
+        // Merge remote (preventing duplicates)
+        remoteAudits.forEach((ra) => {
+          if (!map.has(ra.auditId)) {
+            map.set(ra.auditId, ra);
+          }
+        });
+
+        const mergedAll = Array.from(map.values());
+        saveLocalAuditRecords(mergedAll, currentUserId);
+
+        const mergedForTx = mergedAll.filter(
+          (a) => String(a.transactionId) === String(transactionId)
+        );
+        return mergedForTx.sort((a, b) => {
+          const timeDiff =
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          if (a.action === "CREATE" && b.action !== "CREATE") return -1;
+          if (b.action === "CREATE" && a.action !== "CREATE") return 1;
+          return 0;
+        });
+      }
+    } catch (err) {
+      console.warn("Could not fetch remote audits, using local:", err);
+    }
+  }
+
+  return localList.sort((a, b) => {
+    const timeDiff =
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    if (a.action === "CREATE" && b.action !== "CREATE") return -1;
+    if (b.action === "CREATE" && a.action !== "CREATE") return 1;
+    return 0;
+  });
 };
 
 export const getCachedTransactions = () => {
@@ -294,11 +482,13 @@ let isSyncing = false;
 export const syncOfflineQueue = async () => {
   if (isSyncing || (typeof navigator !== "undefined" && !navigator.onLine)) return;
   const queue = getOfflineQueue();
-  if (!queue || queue.length === 0) return;
+  const auditQueue = getAuditOfflineQueue();
+  if ((!queue || queue.length === 0) && (!auditQueue || auditQueue.length === 0)) return;
 
   isSyncing = true;
-  console.log(`Online detected: Syncing ${queue.length} offline actions to Google Sheets...`);
+  console.log(`Online detected: Syncing ${queue.length} transactions and ${auditQueue.length} audit logs to Google Sheets...`);
 
+  // 1. Process Transaction Offline Queue
   const remainingQueue = [];
   for (const item of queue) {
     try {
@@ -310,12 +500,24 @@ export const syncOfflineQueue = async () => {
         await postRequest({ action: "delete", id: item.id });
       }
     } catch (err) {
-      console.error("Sync item failed:", item, err);
+      console.error("Sync transaction item failed:", item, err);
       remainingQueue.push(item);
     }
   }
-
   saveOfflineQueue(remainingQueue);
+
+  // 2. Process Audit Offline Queue
+  const remainingAuditQueue = [];
+  for (const auditItem of auditQueue) {
+    try {
+      await postRequest({ action: "audit_add", ...auditItem });
+    } catch (err) {
+      console.error("Sync audit item failed:", auditItem, err);
+      remainingAuditQueue.push(auditItem);
+    }
+  }
+  saveAuditOfflineQueue(remainingAuditQueue);
+
   isSyncing = false;
 };
 
@@ -906,6 +1108,19 @@ export const addTransaction = async (data) => {
   ];
   setCachedTransactions(updatedCache);
 
+  // Automatically record CREATE audit record
+  recordAudit({
+    transactionId: payload.id,
+    action: "CREATE",
+    previousValues: null,
+    updatedValues: payload,
+    reason:
+      data.reason ||
+      (normalizedType === "Settled"
+        ? data.notes || "Settled payment recorded"
+        : "Initial transaction creation"),
+  }).catch((err) => console.warn("Audit log for addTransaction failed:", err));
+
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     addToOfflineQueue({ action: "add", payload });
     return { status: "success", offline: true, data: [payload] };
@@ -923,7 +1138,7 @@ export const addTransaction = async (data) => {
 // =======================
 // UPDATE TRANSACTION (GOOGLE SHEETS + OFFLINE QUEUE)
 // =======================
-export const updateTransaction = async (data) => {
+export const updateTransaction = async (data, auditMeta = {}) => {
   const payload = {
     id: data.id,
     person: data.person,
@@ -935,6 +1150,28 @@ export const updateTransaction = async (data) => {
   };
 
   const currentCache = getDataRows(getCachedTransactions());
+  const originalRow = currentCache.find(
+    (item) => String(getRowVal(item, 0, "id")) === String(payload.id)
+  );
+  const prevVals =
+    auditMeta.previousValues ||
+    (originalRow
+      ? {
+          id: payload.id,
+          person: getRowVal(originalRow, 1, "person", ""),
+          amount: parseFloat(getRowVal(originalRow, 2, "amount", 0)) || 0,
+          type: getRowVal(originalRow, 3, "type", ""),
+          date: formatDateDisplay(getRowVal(originalRow, 4, "date", "")),
+          notes: getRowVal(originalRow, 5, "notes", ""),
+          method: getRowVal(
+            originalRow,
+            6,
+            "method",
+            getRowVal(originalRow, 6, "paymentMethod", "Cash")
+          ),
+        }
+      : null);
+
   const updatedCache = currentCache.map((item) => {
     if (String(getRowVal(item, 0, "id")) === String(payload.id)) {
       if (Array.isArray(item)) {
@@ -971,6 +1208,15 @@ export const updateTransaction = async (data) => {
     return item;
   });
   setCachedTransactions(updatedCache);
+
+  // Automatically record UPDATE audit record
+  recordAudit({
+    transactionId: payload.id,
+    action: "UPDATE",
+    previousValues: prevVals,
+    updatedValues: payload,
+    reason: auditMeta.reason || data.reason || "Transaction updated",
+  }).catch((err) => console.warn("Audit log for updateTransaction failed:", err));
 
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     addToOfflineQueue({ action: "update", payload });

@@ -1,7 +1,18 @@
 const DEFAULT_TAB = "transactions";
 const USERS_SHEET_NAME = "Users";
+const AUDIT_SHEET_NAME = "Audit_Logs";
 const ADMIN_USERNAME = "ashflow";
 const HEADERS = ["id", "person", "amount", "type", "date", "notes", "method"];
+const AUDIT_HEADERS = [
+  "audit_id",
+  "transaction_id",
+  "action",
+  "previous_values",
+  "updated_values",
+  "timestamp",
+  "user_id",
+  "reason",
+];
 const USERS_HEADERS = [
   "id",
   "username",
@@ -23,6 +34,14 @@ function doGet(e) {
   try {
     const params = e && e.parameter ? e.parameter : {};
     const token = params.token;
+
+    if (
+      params.action === "audit_get" ||
+      params.action === "get_audits" ||
+      params.type === "audit"
+    ) {
+      return handleGetAudits_(params);
+    }
 
     let sheetName = DEFAULT_TAB;
 
@@ -151,6 +170,20 @@ function doPost(e) {
       lock.waitLock(10000);
       lockAcquired = true;
       return handleUpdateProfileAvatar_(data);
+    }
+
+    // ==========================================
+    // 2.5. TRANSACTION AUDIT LOG ACTIONS
+    // ==========================================
+    if (action === "audit_add" || action === "add_audit") {
+      lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      lockAcquired = true;
+      return handleAddAudit_(data);
+    }
+
+    if (action === "audit_get" || action === "get_audits" || action === "get_audit") {
+      return handleGetAudits_(data);
     }
 
     // ==========================================
@@ -905,6 +938,126 @@ function handleAdminGetUserTransactions_(data) {
     sheetName: userTabName,
     transactions: rows,
   });
+}
+
+// ==========================================
+// 8. AUDIT HISTORY REPOSITORY & SYNC
+// ==========================================
+function getAuditSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(AUDIT_SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(AUDIT_SHEET_NAME);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(AUDIT_HEADERS);
+    sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+
+  return sheet;
+}
+
+function handleAddAudit_(data) {
+  const auditId = String(data.auditId || data.audit_id || "").trim();
+  if (!auditId) {
+    return json_({ success: false, message: "Missing auditId." });
+  }
+
+  const sheet = getAuditSheet_();
+  const rows = sheet.getDataRange().getValues();
+
+  // Prevent duplicate audit entries during synchronization
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === auditId) {
+      return json_({ success: true, message: "Duplicate audit entry ignored." });
+    }
+  }
+
+  const prevVals =
+    typeof data.previousValues === "object"
+      ? JSON.stringify(data.previousValues || {})
+      : String(data.previousValues || "");
+  const updatedVals =
+    typeof data.updatedValues === "object"
+      ? JSON.stringify(data.updatedValues || {})
+      : String(data.updatedValues || "");
+
+  sheet.appendRow([
+    auditId,
+    String(data.transactionId || data.transaction_id || ""),
+    String(data.action || "CREATE"),
+    prevVals,
+    updatedVals,
+    String(data.timestamp || new Date().toISOString()),
+    String(data.userId || data.user_id || ""),
+    String(data.reason || ""),
+  ]);
+
+  return json_({ success: true, message: "Audit logged successfully." });
+}
+
+function handleGetAudits_(data) {
+  const sheet = getAuditSheet_();
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length <= 1) {
+    return json_({ success: true, audits: [] });
+  }
+
+  const targetTxId = data.transactionId || data.transaction_id
+    ? String(data.transactionId || data.transaction_id).trim()
+    : null;
+  const targetUser = data.userId || data.user_id
+    ? String(data.userId || data.user_id).trim().toLowerCase()
+    : null;
+
+  const audits = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const rowAuditId = String(row[0] || "");
+    const rowTxId = String(row[1] || "");
+    const rowAction = String(row[2] || "");
+    let rowPrev = row[3];
+    let rowUpdated = row[4];
+    const rowTimestamp = String(row[5] || "");
+    const rowUserId = String(row[6] || "");
+    const rowReason = String(row[7] || "");
+
+    if (targetTxId && rowTxId !== targetTxId) continue;
+    if (targetUser && rowUserId.toLowerCase() !== targetUser) continue;
+
+    try {
+      if (
+        typeof rowPrev === "string" &&
+        (rowPrev.startsWith("{") || rowPrev.startsWith("["))
+      ) {
+        rowPrev = JSON.parse(rowPrev);
+      }
+    } catch (e) {}
+
+    try {
+      if (
+        typeof rowUpdated === "string" &&
+        (rowUpdated.startsWith("{") || rowUpdated.startsWith("["))
+      ) {
+        rowUpdated = JSON.parse(rowUpdated);
+      }
+    } catch (e) {}
+
+    audits.push({
+      auditId: rowAuditId,
+      transactionId: rowTxId,
+      action: rowAction,
+      previousValues: rowPrev,
+      updatedValues: rowUpdated,
+      timestamp: rowTimestamp,
+      userId: rowUserId,
+      reason: rowReason,
+    });
+  }
+
+  return json_({ success: true, audits: audits });
 }
 
 function json_(value) {

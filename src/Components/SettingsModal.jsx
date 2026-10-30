@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useContext, forwardRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+  forwardRef,
+} from "react";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +85,17 @@ const compressImage = (file, maxSize = 256, quality = 0.82) => {
             return;
           }
 
-          ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, targetSize, targetSize);
+          ctx.drawImage(
+            img,
+            startX,
+            startY,
+            minDim,
+            minDim,
+            0,
+            0,
+            targetSize,
+            targetSize,
+          );
           const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
           resolve(compressedDataUrl);
         } catch (err) {
@@ -92,7 +108,12 @@ const compressImage = (file, maxSize = 256, quality = 0.82) => {
   });
 };
 
-export default function SettingsModal({ open, onClose, currentUser, onLogout }) {
+export default function SettingsModal({
+  open,
+  onClose,
+  currentUser,
+  onLogout,
+}) {
   const theme = useTheme();
   const { activeTheme, setTheme } = useContext(ThemeContext);
   const fileInputRef = useRef(null);
@@ -339,7 +360,9 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
                     fontSize: "1.3rem",
                   }}
                 >
-                  {(userObj?.fullName || userObj?.username || "A").charAt(0).toUpperCase()}
+                  {(userObj?.fullName || userObj?.username || "A")
+                    .charAt(0)
+                    .toUpperCase()}
                 </Avatar>
               )}
 
@@ -371,7 +394,11 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
                     justifyContent: "center",
                   }}
                 >
-                  <CircularProgress size={20} color="inherit" sx={{ color: "#ffffff" }} />
+                  <CircularProgress
+                    size={20}
+                    color="inherit"
+                    sx={{ color: "#ffffff" }}
+                  />
                 </Box>
               )}
             </Box>
@@ -379,7 +406,13 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
 
           {/* User Info & Simple Photo Actions */}
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box display="flex" alignItems="center" gap={1} mb={0.2} flexWrap="wrap">
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={1}
+              mb={0.2}
+              flexWrap="wrap"
+            >
               <Typography
                 variant="subtitle1"
                 fontWeight="800"
@@ -422,7 +455,11 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
 
             <Typography
               variant="caption"
-              sx={{ color: theme.palette.text.secondary, fontWeight: 500, display: "block" }}
+              sx={{
+                color: theme.palette.text.secondary,
+                fontWeight: 500,
+                display: "block",
+              }}
             >
               @{userObj?.username || "ashflow"}
             </Typography>
@@ -584,11 +621,22 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
               <Box display="flex" alignItems="center" gap={1.2}>
                 <CloudSyncIcon sx={{ fontSize: 18, color: "#0A84FF" }} />
                 <Box>
-                  <Typography variant="body2" fontWeight="600" sx={{ fontSize: "0.88rem" }}>
+                  <Typography
+                    variant="body2"
+                    fontWeight="600"
+                    sx={{ fontSize: "0.88rem" }}
+                  >
                     Google Sheets Sync
                   </Typography>
-                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: "0.72rem" }}>
-                    Tab: {userObj?.sheetName || "transactions"} • {cachedCount} cached
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: "0.72rem",
+                    }}
+                  >
+                    Tab: {userObj?.sheetName || "transactions"} • {cachedCount}{" "}
+                    cached
                   </Typography>
                 </Box>
               </Box>
@@ -606,7 +654,10 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
                   px: 1.4,
                   py: 0.3,
                   borderColor: theme.palette.divider,
-                  color: syncStatus === "Synced!" ? theme.palette.primary.main : theme.palette.text.primary,
+                  color:
+                    syncStatus === "Synced!"
+                      ? theme.palette.primary.main
+                      : theme.palette.text.primary,
                 }}
               >
                 {syncLoading ? (
@@ -653,9 +704,8 @@ export default function SettingsModal({ open, onClose, currentUser, onLogout }) 
               mt: 0.3,
             }}
           >
-            Crafted with by Ashfak
+            Crafted by Ashfak{" "}
           </Typography>
-
         </Box>
 
         {/* 5. SIMPLE SIGN OUT BUTTON */}
