@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 function createWindow() {
-  const iconPath = path.join(__dirname, "../assets/AshFavICon.png");
+  const iconPath = path.join(__dirname, "../src/assets/logo.png");
   const appIcon = nativeImage.createFromPath(iconPath);
   const mainWindow = new BrowserWindow({
     width: 1400,
