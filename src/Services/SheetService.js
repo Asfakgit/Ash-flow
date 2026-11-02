@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const SHEETS_API_URL =
   import.meta.env.VITE_SHEETS_API_URL ||
-  "https://script.google.com/macros/s/AKfycbybd9A5GKRU4l01NhtwCEAKN2GAh-5qXN8limZE4l19UWmLsZi978ik8qNpWotUSpNI/exec";
+  "https://script.google.com/macros/s/AKfycbxr4pcI_H0wUDoQiGYyFSzBauPQiFp4PckrVWIyh9-bzik0BEXk2SK8qudGh0yfJonx/exec";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
