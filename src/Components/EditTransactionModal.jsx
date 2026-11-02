@@ -17,6 +17,7 @@ import {
   InputAdornment,
   Paper,
   Divider,
+  Popper,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import EditNoteIcon from "@mui/icons-material/EditNote";
@@ -87,13 +88,31 @@ function EditTransactionModal({
     }
   }, [open]);
 
+  // Extract unique contacts for autocomplete and quick lookup (sorted alphabetically)
   const existingPersonNames = useMemo(() => {
     const rows = getDataRows(transactions);
     const names = rows
       .map((row) => capitalizeName(getRowVal(row, 1, "person", "")))
       .filter(Boolean);
-    return Array.from(new Set(names));
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
   }, [transactions]);
+
+  // Prioritize names starting with the typed letter(s)
+  const filterPersonOptions = (options, { inputValue }) => {
+    if (!inputValue || !inputValue.trim()) return options;
+    const query = inputValue.trim().toLowerCase();
+    const startsWith = [];
+    const contains = [];
+    options.forEach((opt) => {
+      const lower = opt.toLowerCase();
+      if (lower.startsWith(query)) {
+        startsWith.push(opt);
+      } else if (lower.includes(query)) {
+        contains.push(opt);
+      }
+    });
+    return [...startsWith, ...contains];
+  };
 
   // Original Values capture before editing
   const originalValues = useMemo(() => {
@@ -399,23 +418,63 @@ function EditTransactionModal({
           <Box display="flex" flexDirection="column" gap={{ xs: 1.8, sm: 2.2 }}>
             <Autocomplete
               freeSolo
+              openOnFocus
+              autoHighlight
               options={existingPersonNames}
+              filterOptions={filterPersonOptions}
               value={person}
               onChange={(event, newValue) => {
                 setPerson(typeof newValue === "string" ? newValue : "");
               }}
-              onInputChange={(event, newInputValue) =>
-                setPerson(newInputValue || "")
-              }
+              onInputChange={(event, newInputValue) => {
+                setPerson(newInputValue || "");
+              }}
               onBlur={() => setPerson((prev) => capitalizeName(prev))}
               disabled={loading}
+              PopperComponent={(popperProps) => (
+                <Popper
+                  {...popperProps}
+                  style={{ ...popperProps.style, zIndex: 99999 }}
+                  placement="bottom-start"
+                />
+              )}
+              PaperComponent={({ children, ...paperProps }) => (
+                <Paper
+                  {...paperProps}
+                  elevation={8}
+                  sx={{
+                    backgroundColor:
+                      theme.palette.mode === "dark" ? "#1e293b" : "#ffffff",
+                    color: theme.palette.text.primary,
+                    border: `1px solid ${theme.palette.divider}`,
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.7)",
+                    borderRadius: "8px",
+                    mt: 0.5,
+                    "& .MuiAutocomplete-option": {
+                      py: 1,
+                      px: 1.5,
+                      fontSize: "0.88rem",
+                      fontWeight: 600,
+                      "&[aria-selected='true']": {
+                        backgroundColor: "rgba(16, 185, 129, 0.18) !important",
+                        color: "#10b981",
+                      },
+                      "&:hover": {
+                        backgroundColor: "rgba(16, 185, 129, 0.12) !important",
+                      },
+                    },
+                  }}
+                >
+                  {children}
+                </Paper>
+              )}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Person Name *"
                   fullWidth
                   size="small"
-                  placeholder="e.g. Thanuja, Jaseem"
+                  placeholder="Type first letter or select name"
                   variant="outlined"
                 />
               )}
@@ -462,6 +521,21 @@ function EditTransactionModal({
                 onChange={(e) => setType(e.target.value)}
                 disabled={loading}
                 variant="outlined"
+                SelectProps={{
+                  MenuProps: {
+                    sx: { zIndex: 99999 },
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 280,
+                        zIndex: 99999,
+                        backgroundColor:
+                          theme.palette.mode === "dark" ? "#1e293b" : "#ffffff",
+                        border: `1px solid ${theme.palette.divider}`,
+                        boxShadow: "0 12px 30px rgba(0, 0, 0, 0.8)",
+                      },
+                    },
+                  },
+                }}
               >
                 <MenuItem value="Lent" sx={{ color: "#10B981", fontWeight: 700 }}>
                   ↑ Lent (You gave)
@@ -501,6 +575,21 @@ function EditTransactionModal({
                 onChange={(e) => setMethod(e.target.value)}
                 disabled={loading}
                 variant="outlined"
+                SelectProps={{
+                  MenuProps: {
+                    sx: { zIndex: 99999 },
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 280,
+                        zIndex: 99999,
+                        backgroundColor:
+                          theme.palette.mode === "dark" ? "#1e293b" : "#ffffff",
+                        border: `1px solid ${theme.palette.divider}`,
+                        boxShadow: "0 12px 30px rgba(0, 0, 0, 0.8)",
+                      },
+                    },
+                  },
+                }}
               >
                 <MenuItem value="Cash">Cash</MenuItem>
                 <MenuItem value="GPay">GPay / UPI</MenuItem>

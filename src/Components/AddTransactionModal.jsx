@@ -15,6 +15,8 @@ import {
   InputAdornment,
   CircularProgress,
   Chip,
+  Popper,
+  Paper,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
@@ -75,14 +77,31 @@ export default function AddTransactionModal({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Extract unique contacts for autocomplete and quick suggestion pills
+  // Extract unique contacts for autocomplete and quick lookup (sorted alphabetically)
   const existingPersonNames = useMemo(() => {
     const rows = getDataRows(transactions);
     const names = rows
       .map((row) => capitalizeName(getRowVal(row, 1, "person", "")))
       .filter(Boolean);
-    return Array.from(new Set(names));
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
   }, [transactions]);
+
+  // Prioritize names starting with the typed letter(s)
+  const filterPersonOptions = (options, { inputValue }) => {
+    if (!inputValue || !inputValue.trim()) return options;
+    const query = inputValue.trim().toLowerCase();
+    const startsWith = [];
+    const contains = [];
+    options.forEach((opt) => {
+      const lower = opt.toLowerCase();
+      if (lower.startsWith(query)) {
+        startsWith.push(opt);
+      } else if (lower.includes(query)) {
+        contains.push(opt);
+      }
+    });
+    return [...startsWith, ...contains];
+  };
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -305,18 +324,63 @@ export default function AddTransactionModal({
         <Box>
           <Autocomplete
             freeSolo
+            openOnFocus
+            autoHighlight
             options={existingPersonNames}
+            filterOptions={filterPersonOptions}
             value={person}
-            onInputChange={(event, newInputValue) => setPerson(newInputValue || "")}
+            onChange={(event, newValue) => {
+              setPerson(typeof newValue === "string" ? newValue : "");
+            }}
+            onInputChange={(event, newInputValue) => {
+              setPerson(newInputValue || "");
+            }}
             onBlur={() => setPerson((prev) => capitalizeName(prev))}
             disabled={loading}
+            PopperComponent={(popperProps) => (
+              <Popper
+                {...popperProps}
+                style={{ ...popperProps.style, zIndex: 99999 }}
+                placement="bottom-start"
+              />
+            )}
+            PaperComponent={({ children, ...paperProps }) => (
+              <Paper
+                {...paperProps}
+                elevation={8}
+                sx={{
+                  backgroundColor:
+                    theme.palette.mode === "dark" ? "#1e293b" : "#ffffff",
+                  color: theme.palette.text.primary,
+                  border: `1px solid ${theme.palette.divider}`,
+                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.7)",
+                  borderRadius: "8px",
+                  mt: 0.5,
+                  "& .MuiAutocomplete-option": {
+                    py: 1,
+                    px: 1.5,
+                    fontSize: "0.88rem",
+                    fontWeight: 600,
+                    "&[aria-selected='true']": {
+                      backgroundColor: "rgba(16, 185, 129, 0.18) !important",
+                      color: "#10b981",
+                    },
+                    "&:hover": {
+                      backgroundColor: "rgba(16, 185, 129, 0.12) !important",
+                    },
+                  },
+                }}
+              >
+                {children}
+              </Paper>
+            )}
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Person Name"
+                label="Person Name *"
                 fullWidth
                 size="small"
-                placeholder="Name"
+                placeholder="Type first letter or select name"
                 variant="outlined"
               />
             )}
@@ -360,6 +424,21 @@ export default function AddTransactionModal({
             onChange={(e) => setType(e.target.value)}
             disabled={loading}
             variant="outlined"
+            SelectProps={{
+              MenuProps: {
+                sx: { zIndex: 99999 },
+                PaperProps: {
+                  sx: {
+                    maxHeight: 280,
+                    zIndex: 99999,
+                    backgroundColor:
+                      theme.palette.mode === "dark" ? "#1e293b" : "#ffffff",
+                    border: `1px solid ${theme.palette.divider}`,
+                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.8)",
+                  },
+                },
+              },
+            }}
           >
             <MenuItem value="Lent" sx={{ color: "#10B981", fontWeight: 700 }}>
               ↑ Lent (I gave)
@@ -381,6 +460,21 @@ export default function AddTransactionModal({
             onChange={(e) => setMethod(e.target.value)}
             disabled={loading}
             variant="outlined"
+            SelectProps={{
+              MenuProps: {
+                sx: { zIndex: 99999 },
+                PaperProps: {
+                  sx: {
+                    maxHeight: 280,
+                    zIndex: 99999,
+                    backgroundColor:
+                      theme.palette.mode === "dark" ? "#1e293b" : "#ffffff",
+                    border: `1px solid ${theme.palette.divider}`,
+                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.8)",
+                  },
+                },
+              },
+            }}
           >
             <MenuItem value="Cash">Cash</MenuItem>
             <MenuItem value="GPay">GPay / UPI</MenuItem>

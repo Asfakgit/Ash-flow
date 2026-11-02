@@ -987,7 +987,12 @@ function handleAddAudit_(data) {
   sheet.appendRow([
     auditId,
     String(data.transactionId || data.transaction_id || ""),
-    String(data.action || "CREATE"),
+    String(
+      data.auditAction ||
+      data.actionType ||
+      (data.action !== "audit_add" && data.action !== "add_audit" ? data.action : "") ||
+      "CREATE"
+    ),
     prevVals,
     updatedVals,
     String(data.timestamp || new Date().toISOString()),
