@@ -127,7 +127,6 @@ export default function SettingsModal({
   const [uploadLoading, setUploadLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState("");
-  const [showStory, setShowStory] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -170,7 +169,7 @@ export default function SettingsModal({
     try {
       await syncOfflineQueue();
       setSyncStatus("Synced!");
-    } catch (err) {
+    } catch {
       setSyncStatus("Failed");
     } finally {
       setSyncLoading(false);

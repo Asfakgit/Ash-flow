@@ -35,78 +35,18 @@ const Transition = forwardRef(function Transition(props, ref) {
   );
 });
 
-// Utility to resize and compress uploaded images to prevent QuotaExceededError
-const compressImage = (file, maxSize = 256, quality = 0.82) => {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith("image/")) {
-      reject(new Error("Please upload a valid image file."));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Failed to read file."));
-    reader.onload = (readerEvent) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Failed to load image."));
-      img.onload = () => {
-        try {
-          const width = img.width;
-          const height = img.height;
-
-          // Square center crop calculation
-          const minDim = Math.min(width, height);
-          const startX = (width - minDim) / 2;
-          const startY = (height - minDim) / 2;
-
-          const targetSize = Math.min(maxSize, minDim);
-
-          const canvas = document.createElement("canvas");
-          canvas.width = targetSize;
-          canvas.height = targetSize;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(readerEvent.target.result);
-            return;
-          }
-
-          ctx.drawImage(
-            img,
-            startX,
-            startY,
-            minDim,
-            minDim,
-            0,
-            0,
-            targetSize,
-            targetSize
-          );
-
-          // Convert to lightweight, crisp JPEG data URL (~15-30 KB)
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
-          resolve(compressedDataUrl);
-        } catch (err) {
-          reject(err);
-        }
-      };
-      img.src = readerEvent.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
 function AppInfoModal({ open, onClose, currentUser }) {
   const theme = useTheme();
   const fileInputRef = useRef(null);
   const [uploadError, setUploadError] = useState("");
 
   const userObj = currentUser || getAuthUser();
-  const isAdmin = userObj?.role === "ADMIN";
 
   const [avatarImage, setAvatarImage] = useState(() => getUserAvatar(userObj));
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvatarImage(getUserAvatar(userObj));
     }
   }, [open, userObj]);

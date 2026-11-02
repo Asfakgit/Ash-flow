@@ -99,6 +99,7 @@ export default function AdminUserModal({ open, onClose, currentUser, onUsersUpda
     if (open) {
       loadUsers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Lock background body scroll when open

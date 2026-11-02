@@ -203,10 +203,12 @@ export default function AddTransactionModal({
     <Dialog
       open={Boolean(open)}
       TransitionComponent={Transition}
-      keepMounted
       onClose={loading ? undefined : onClose}
       maxWidth="sm"
       fullWidth
+      sx={{ zIndex: 1400 }}
+      disableEnforceFocus
+      disableRestoreFocus
       PaperProps={{
         sx: {
           borderRadius: { xs: 2.5, sm: 3 },

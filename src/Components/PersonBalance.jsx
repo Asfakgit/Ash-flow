@@ -1,5 +1,4 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, forwardRef } from "react";
 import { useTheme } from "@mui/material/styles";
 import {
   Table,
@@ -28,7 +27,6 @@ import HistoryIcon from "@mui/icons-material/History";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import ManageHistoryIcon from "@mui/icons-material/ManageHistory";
 import soundEffects from "../Services/soundEffects";
 import TransactionAuditModal from "./TransactionAuditModal";
 import EditTransactionModal from "./EditTransactionModal";
@@ -40,8 +38,11 @@ import {
   formatDateDisplay,
   getTodayDisplay,
   cleanNotesDisplay,
-  updateTransaction,
 } from "../Services/SheetService";
+
+const Transition = forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 function PersonBalance({
   transactions = [],
@@ -51,7 +52,6 @@ function PersonBalance({
   onOpenAdd,
 }) {
   const theme = useTheme();
-  const [balances, setBalances] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [selectedTxForAudit, setSelectedTxForAudit] = useState(null);
   const [selectedTxForEdit, setSelectedTxForEdit] = useState(null);
@@ -164,7 +164,9 @@ function PersonBalance({
     if (onOpenAdd && selectedPerson) {
       const p = selectedPerson;
       setSelectedPerson(null);
-      onOpenAdd({ person: capitalizeName(p), type: type || "Lent" });
+      setTimeout(() => {
+        onOpenAdd({ person: capitalizeName(p), type: type || "Lent" });
+      }, 80);
     }
   };
 
@@ -189,10 +191,14 @@ function PersonBalance({
     return set;
   }, [transactions]);
 
-  useEffect(() => {
+  const [balanceFilter, setBalanceFilter] = useState("active"); // 'active' | 'settled'
+
+  // Calculate both active balances and closed/settled accounts
+  const { activeEntries, settledEntries } = useMemo(() => {
     const rows = getDataRows(transactions);
     const balanceMap = {};
     const hasSettledMap = {};
+    const allPeople = new Set();
 
     // Sort rows from oldest to newest by id so running balance is calculated chronologically
     const sortedRows = [...rows].sort((a, b) => {
@@ -205,9 +211,9 @@ function PersonBalance({
       const rawPerson = getRowVal(row, 1, "person", "");
       if (!rawPerson || !String(rawPerson).trim()) return;
       const person = capitalizeName(rawPerson);
+      allPeople.add(person);
       const amount = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
       const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
-
       const notes = String(getRowVal(row, 5, "notes", "")).toLowerCase();
 
       if (!balanceMap[person]) {
@@ -241,14 +247,28 @@ function PersonBalance({
       }
     });
 
-    Object.keys(balanceMap).forEach((person) => {
-      if (Math.abs(balanceMap[person]) < 0.01 || hasSettledMap[person]) {
-        delete balanceMap[person];
+    const active = [];
+    const settled = [];
+
+    allPeople.forEach((person) => {
+      const bal = balanceMap[person] || 0;
+      if (Math.abs(bal) >= 0.01 && !hasSettledMap[person]) {
+        active.push([person, bal]);
+      } else {
+        settled.push([person, 0]);
       }
     });
 
-    setBalances(balanceMap);
+    // Sort active by absolute balance descending
+    active.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+    // Sort settled alphabetically
+    settled.sort((a, b) => a[0].localeCompare(b[0]));
+
+    return { activeEntries: active, settledEntries: settled };
   }, [transactions]);
+
+  const displayedEntries =
+    balanceFilter === "active" ? activeEntries : settledEntries;
 
   const handleSettlePerson = (person, balance) => {
     const confirmMsg = `Record a full payment to close the account for "${person}"? This will add a 'Settled' transaction for the exact remaining balance, closing their account and removing them from the active balances list.`;
@@ -256,9 +276,7 @@ function PersonBalance({
     const executeSettle = async () => {
       try {
         soundEffects.playSettle();
-        const settleAmt = Math.abs(
-          balance !== undefined ? balance : balances[person] || 0,
-        );
+        const settleAmt = Math.abs(balance !== undefined ? balance : 0);
         const settleTx = {
           id: Date.now(),
           person: capitalizeName(person),
@@ -286,6 +304,8 @@ function PersonBalance({
           console.error("Settle failed:", err);
           if (triggerRefresh) triggerRefresh();
         });
+
+        setSelectedPerson(null);
 
         if (showNotification) {
           showNotification({
@@ -366,8 +386,6 @@ function PersonBalance({
     }
   };
 
-  const entries = Object.entries(balances);
-
   return (
     <>
     <Paper
@@ -407,7 +425,7 @@ function PersonBalance({
           >
             <PeopleAltIcon sx={{ fontSize: { xs: 17, sm: 20 } }} />
           </Box>
-          <Box display="flex" alignItems="center" gap={0.8} sx={{ minWidth: 0 }}>
+          <Box display="flex" alignItems="center" gap={0.8} sx={{ minWidth: 0, flexWrap: "wrap" }}>
             <Typography
               variant="subtitle1"
               fontWeight="800"
@@ -420,19 +438,52 @@ function PersonBalance({
             >
               Person Balances
             </Typography>
-            <Chip
-              size="small"
-              label={`${entries.length} active`}
-              sx={{
-                height: 20,
-                fontSize: "0.68rem",
-                fontWeight: 700,
-                color: theme.palette.text.secondary,
-                bgcolor: "rgba(148, 163, 184, 0.12)",
-                border: `1px solid ${theme.palette.divider}`,
-                display: { xs: "none", sm: "inline-flex" },
-              }}
-            />
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Chip
+                size="small"
+                clickable
+                onClick={() => setBalanceFilter("active")}
+                label={`Active (${activeEntries.length})`}
+                sx={{
+                  height: 20,
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  color: balanceFilter === "active" ? "#10b981" : theme.palette.text.secondary,
+                  bgcolor:
+                    balanceFilter === "active"
+                      ? "rgba(16, 185, 129, 0.16)"
+                      : "rgba(148, 163, 184, 0.1)",
+                  border: `1px solid ${
+                    balanceFilter === "active"
+                      ? "rgba(16, 185, 129, 0.4)"
+                      : theme.palette.divider
+                  }`,
+                }}
+              />
+              <Chip
+                size="small"
+                clickable
+                onClick={() => setBalanceFilter("settled")}
+                label={`Settled (${settledEntries.length})`}
+                sx={{
+                  height: 20,
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  color: balanceFilter === "settled" ? "#94a3b8" : theme.palette.text.secondary,
+                  bgcolor:
+                    balanceFilter === "settled"
+                      ? "rgba(148, 163, 184, 0.22)"
+                      : "rgba(148, 163, 184, 0.08)",
+                  border: `1px solid ${
+                    balanceFilter === "settled"
+                      ? "rgba(148, 163, 184, 0.4)"
+                      : theme.palette.divider
+                  }`,
+                }}
+              />
+            </Box>
           </Box>
         </Box>
 
@@ -525,22 +576,25 @@ function PersonBalance({
           </TableHead>
 
           <TableBody>
-            {entries.length === 0 ? (
+            {displayedEntries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
                   <Typography
                     variant="body2"
                     sx={{ color: theme.palette.text.secondary }}
                   >
-                    No active balances.
+                    {balanceFilter === "active"
+                      ? "No active balances."
+                      : "No settled or closed accounts."}
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              entries.map(([person, balance]) => {
+              displayedEntries.map(([person, balance]) => {
                 const initial = person ? person.charAt(0).toUpperCase() : "?";
                 const isPositive = balance > 0;
                 const isNegative = balance < 0;
+                const isSettledRow = balanceFilter === "settled" || Math.abs(balance) < 0.01;
 
                 return (
                   <TableRow
@@ -602,77 +656,82 @@ function PersonBalance({
                       align="right"
                       sx={{ py: 0.9, pr: { xs: 0, sm: 2 } }}
                     >
-                      <Tooltip title="Click to Settle Account">
+                      {isSettledRow ? (
                         <Chip
-                          clickable
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSettlePerson(person, balance);
-                          }}
-                          onDelete={(e) => {
-                            e.stopPropagation();
-                            handleSettlePerson(person, balance);
-                          }}
-                          deleteIcon={
-                            <CheckCircleOutlineIcon
-                              sx={{
-                                fontSize: "0.95rem !important",
-                                color: "inherit !important",
-                                marginLeft: "4px !important",
-                                marginRight: "-2px !important",
-                                opacity: 0.95,
-                              }}
-                            />
-                          }
-                          label={
-                            isPositive
-                              ? `You Lent ₹${balance.toLocaleString("en-IN")}`
-                              : isNegative
-                              ? `You Owe ₹${Math.abs(balance).toLocaleString(
-                                  "en-IN",
-                                )}`
-                              : "Settled"
-                          }
+                          label="Settled Account ✓"
                           size="small"
                           sx={{
                             fontWeight: 700,
                             borderRadius: "6px",
                             px: 0.75,
                             py: 1.5,
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                            "&:hover": {
-                              transform: "scale(1.04)",
-                              backgroundColor: isPositive
-                                ? "rgba(16, 185, 129, 0.28)"
-                                : isNegative
-                                ? "rgba(244, 63, 94, 0.28)"
-                                : "rgba(148, 163, 184, 0.28)",
-                            },
-                            "&:active": {
-                              transform: "scale(0.95)",
-                            },
                             fontSize: { xs: "0.7rem", sm: "0.75rem" },
-                            backgroundColor: isPositive
-                              ? "rgba(16, 185, 129, 0.15)"
-                              : isNegative
-                              ? "rgba(244, 63, 94, 0.15)"
-                              : "rgba(148, 163, 184, 0.15)",
-                            color: isPositive
-                              ? theme.palette.primary.main
-                              : isNegative
-                              ? theme.palette.error.main
-                              : theme.palette.text.secondary,
-                            border: `1px solid ${
-                              isPositive
-                                ? "rgba(16, 185, 129, 0.3)"
-                                : isNegative
-                                ? "rgba(244, 63, 94, 0.3)"
-                                : "rgba(148, 163, 184, 0.3)"
-                            }`,
+                            backgroundColor: "rgba(148, 163, 184, 0.14)",
+                            color: "#94a3b8",
+                            border: "1px solid rgba(148, 163, 184, 0.25)",
                           }}
                         />
-                      </Tooltip>
+                      ) : (
+                        <Tooltip title="Click to Settle Account">
+                          <Chip
+                            clickable
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSettlePerson(person, balance);
+                            }}
+                            onDelete={(e) => {
+                              e.stopPropagation();
+                              handleSettlePerson(person, balance);
+                            }}
+                            deleteIcon={
+                              <CheckCircleOutlineIcon
+                                sx={{
+                                  fontSize: "0.95rem !important",
+                                  color: "inherit !important",
+                                  marginLeft: "4px !important",
+                                  marginRight: "-2px !important",
+                                  opacity: 0.95,
+                                }}
+                              />
+                            }
+                            label={
+                              isPositive
+                                ? `You Lent ₹${balance.toLocaleString("en-IN")}`
+                                : `You Owe ₹${Math.abs(balance).toLocaleString("en-IN")}`
+                            }
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              borderRadius: "6px",
+                              px: 0.75,
+                              py: 1.5,
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                              "&:hover": {
+                                transform: "scale(1.04)",
+                                backgroundColor: isPositive
+                                  ? "rgba(16, 185, 129, 0.28)"
+                                  : "rgba(244, 63, 94, 0.28)",
+                              },
+                              "&:active": {
+                                transform: "scale(0.95)",
+                              },
+                              fontSize: { xs: "0.7rem", sm: "0.75rem" },
+                              backgroundColor: isPositive
+                                ? "rgba(16, 185, 129, 0.15)"
+                                : "rgba(244, 63, 94, 0.15)",
+                              color: isPositive
+                                ? theme.palette.primary.main
+                                : theme.palette.error.main,
+                              border: `1px solid ${
+                                isPositive
+                                  ? theme.palette.custom.successBoxBorder
+                                  : theme.palette.custom.errorBoxBorder
+                              }`,
+                            }}
+                          />
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -687,10 +746,13 @@ function PersonBalance({
     <Dialog
       open={Boolean(selectedPerson)}
       onClose={() => setSelectedPerson(null)}
-      TransitionComponent={Slide}
-      TransitionProps={{ direction: "up" }}
+      TransitionComponent={Transition}
       maxWidth="sm"
       fullWidth
+      sx={{ zIndex: 1300 }}
+      disableEnforceFocus
+      disableRestoreFocus
+      disableAutoFocus
       PaperProps={{
         sx: {
           borderRadius: { xs: 3, sm: 3.5 },
@@ -904,18 +966,46 @@ function PersonBalance({
           }}
         >
           <Box>
-            <Typography
-              variant="caption"
-              sx={{
-                color: theme.palette.text.secondary,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                fontSize: "0.65rem",
-              }}
-            >
-              Current Net Position
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  fontSize: "0.65rem",
+                }}
+              >
+                Current Net Position
+              </Typography>
+              {personStats.net !== 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => handleSettlePerson(selectedPerson, personStats.net)}
+                  sx={{
+                    py: 0.1,
+                    px: 0.8,
+                    height: 20,
+                    borderRadius: "5px",
+                    fontWeight: 700,
+                    fontSize: "0.62rem",
+                    textTransform: "none",
+                    color: "#94a3b8",
+                    borderColor: "rgba(148, 163, 184, 0.3)",
+                    bgcolor: "rgba(148, 163, 184, 0.08)",
+                    "&:hover": {
+                      bgcolor: "rgba(148, 163, 184, 0.2)",
+                      borderColor: "rgba(148, 163, 184, 0.5)",
+                      color: "#ffffff",
+                    },
+                  }}
+                >
+                  Full Payment to Close
+                </Button>
+              )}
+            </Box>
             <Typography
               variant="h6"
               fontWeight="900"
@@ -1161,14 +1251,6 @@ function PersonBalance({
                 ? "#0a84ff"
                 : "#94a3b8";
 
-              const badgeBg = isLent
-                ? "rgba(16, 185, 129, 0.14)"
-                : isBorrowed
-                ? "rgba(239, 68, 68, 0.14)"
-                : isPartial
-                ? "rgba(10, 132, 255, 0.14)"
-                : "rgba(148, 163, 184, 0.14)";
-
               return (
                 <Box
                   key={getRowVal(row, 0, "id", idx)}
@@ -1284,23 +1366,6 @@ function PersonBalance({
                     </Typography>
 
                     <Box display="flex" alignItems="center" gap={0.4}>
-                      <Tooltip title="View Audit History" arrow>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTxForAudit(row);
-                          }}
-                          sx={{
-                            p: 0.3,
-                            color: theme.palette.text.secondary,
-                            "&:hover": { color: "#10b981" },
-                          }}
-                        >
-                          <ManageHistoryIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-
                       {isClosed ? (
                         <Chip
                           label="Closed"
@@ -1383,6 +1448,8 @@ function PersonBalance({
       setTransactions={setTransactions}
       onSuccess={(msg) => {
         setSelectedTxForEdit(null);
+        setSelectedTxForAudit(null);
+        setSelectedPerson(null);
         if (showNotification) {
           showNotification({
             type: "success",

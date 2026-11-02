@@ -155,6 +155,7 @@ function TransactionAuditModal({ open, onClose, transaction, onEdit }) {
   useEffect(() => {
     let isMounted = true;
     if (open && txId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(true);
       getAuditHistoryForTransaction(txId)
         .then((records) => {
@@ -180,10 +181,12 @@ function TransactionAuditModal({ open, onClose, transaction, onEdit }) {
     <Dialog
       open={Boolean(open)}
       TransitionComponent={Transition}
-      keepMounted
       onClose={onClose}
       maxWidth="sm"
       fullWidth
+      sx={{ zIndex: 1450 }}
+      disableEnforceFocus
+      disableRestoreFocus
       PaperProps={{
         sx: {
           borderRadius: { xs: 2, sm: 2.5 },
@@ -711,7 +714,7 @@ function TransactionAuditModal({ open, onClose, transaction, onEdit }) {
           Close
         </Button>
 
-        {onEdit && !isSettled && (
+        {onEdit && (
           <Button
             variant="contained"
             onClick={() => {

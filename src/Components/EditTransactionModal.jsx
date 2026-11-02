@@ -98,22 +98,42 @@ function EditTransactionModal({
   // Original Values capture before editing
   const originalValues = useMemo(() => {
     if (!transaction) return null;
+    const rawType = String(getRowVal(transaction, 3, "type", "Lent")).trim();
+    const normalizedType =
+      rawType.toLowerCase() === "borrowed" || rawType.toLowerCase() === "borrow"
+        ? "Borrowed"
+        : rawType.toLowerCase() === "partial payment" || rawType.toLowerCase() === "partial"
+        ? "Partial Payment"
+        : rawType.toLowerCase().includes("settled")
+        ? "Settled"
+        : "Lent";
+
+    const rawMethod = String(
+      getRowVal(transaction, 6, "method") ||
+        getRowVal(transaction, 6, "paymentMethod") ||
+        "Cash"
+    ).trim();
+    const normalizedMethod =
+      rawMethod.toLowerCase() === "gpay" || rawMethod.toLowerCase().includes("upi")
+        ? "GPay"
+        : rawMethod.toLowerCase() === "bank" || rawMethod.toLowerCase().includes("transfer")
+        ? "Bank"
+        : "Cash";
+
     return {
       id: getRowVal(transaction, 0, "id", ""),
       person: capitalizeName(getRowVal(transaction, 1, "person", "")),
       amount: parseFloat(getRowVal(transaction, 2, "amount", 0)) || 0,
-      type: getRowVal(transaction, 3, "type", "Lent"),
+      type: normalizedType,
       date: formatDateDisplay(getRowVal(transaction, 4, "date", "")),
       notes: getRowVal(transaction, 5, "notes", "") || "",
-      method:
-        getRowVal(transaction, 6, "method") ||
-        getRowVal(transaction, 6, "paymentMethod") ||
-        "Cash",
+      method: normalizedMethod,
     };
   }, [transaction]);
 
   useEffect(() => {
     if (originalValues && open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPerson(originalValues.person);
       setAmount(String(originalValues.amount));
       setType(originalValues.type);
@@ -287,10 +307,12 @@ function EditTransactionModal({
       <Dialog
         open={Boolean(open)}
         TransitionComponent={Transition}
-        keepMounted
         onClose={loading ? undefined : onClose}
         maxWidth="sm"
         fullWidth
+        sx={{ zIndex: 1550 }}
+        disableEnforceFocus
+        disableRestoreFocus
         PaperProps={{
           sx: {
             borderRadius: { xs: 2, sm: 2.5 },
@@ -379,6 +401,9 @@ function EditTransactionModal({
               freeSolo
               options={existingPersonNames}
               value={person}
+              onChange={(event, newValue) => {
+                setPerson(typeof newValue === "string" ? newValue : "");
+              }}
               onInputChange={(event, newInputValue) =>
                 setPerson(newInputValue || "")
               }
@@ -621,6 +646,9 @@ function EditTransactionModal({
         onClose={() => (loading ? null : setConfirmOpen(false))}
         maxWidth="xs"
         fullWidth
+        sx={{ zIndex: 1650 }}
+        disableEnforceFocus
+        disableRestoreFocus
         PaperProps={{
           sx: {
             borderRadius: "14px",

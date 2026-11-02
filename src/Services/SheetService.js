@@ -352,7 +352,7 @@ export const recordAudit = async ({
   const existingAudits = getLocalAuditRecords(null, currentUserId);
   const exists = existingAudits.some((a) => a.auditId === finalAuditId);
   if (!exists) {
-    const updated = [auditEntry, ...existingAudits];
+    const updated = [...existingAudits, auditEntry];
     saveLocalAuditRecords(updated, currentUserId);
   }
 
@@ -363,7 +363,12 @@ export const recordAudit = async ({
   }
 
   try {
-    await postRequest({ action: "audit_add", ...auditEntry });
+    await postRequest({
+      ...auditEntry,
+      auditAction: auditEntry.action,
+      actionType: auditEntry.action,
+      action: "audit_add",
+    });
     return { success: true, offline: false, audit: auditEntry };
   } catch (err) {
     console.warn("Audit postRequest failed, saving to audit queue:", err);
@@ -398,10 +403,18 @@ export const getAuditHistoryForTransaction = async (transactionId) => {
 
         // Put all local
         allLocal.forEach((a) => map.set(a.auditId, a));
-        // Merge remote (preventing duplicates)
+        // Merge remote (preventing duplicates and normalizing actions)
         remoteAudits.forEach((ra) => {
-          if (!map.has(ra.auditId)) {
-            map.set(ra.auditId, ra);
+          const cleanRa = {
+            ...ra,
+            action:
+              ra.auditAction ||
+              (ra.action && ra.action !== "audit_add" && ra.action !== "add_audit"
+                ? ra.action
+                : "CREATE"),
+          };
+          if (!map.has(cleanRa.auditId)) {
+            map.set(cleanRa.auditId, cleanRa);
           }
         });
 
@@ -510,7 +523,12 @@ export const syncOfflineQueue = async () => {
   const remainingAuditQueue = [];
   for (const auditItem of auditQueue) {
     try {
-      await postRequest({ action: "audit_add", ...auditItem });
+      await postRequest({
+        ...auditItem,
+        auditAction: auditItem.action,
+        actionType: auditItem.action,
+        action: "audit_add",
+      });
     } catch (err) {
       console.error("Sync audit item failed:", auditItem, err);
       remainingAuditQueue.push(auditItem);
@@ -941,7 +959,9 @@ export const getUserAvatar = (user) => {
     try {
       const local = localStorage.getItem(key);
       if (local) return local;
-    } catch {}
+    } catch {
+      /* ignore storage read error */
+    }
   }
   return target.avatar || null;
 };
@@ -964,7 +984,9 @@ export const setUserAvatar = (avatarDataUrl, user) => {
   // Remove any legacy global key so no avatar leaks across users
   try {
     localStorage.removeItem("app_avatar_img");
-  } catch {}
+  } catch {
+    /* ignore legacy cleanup error */
+  }
 
   // Update cached auth user
   const curr = getAuthUser();
