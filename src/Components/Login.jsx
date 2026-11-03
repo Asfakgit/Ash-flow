@@ -417,7 +417,7 @@ const Login = ({ onLogin }) => {
                   <form onSubmit={handleLoginSubmit}>
                     <TextField
                       fullWidth
-                      label="Username or Google Email"
+                      label="Username"
                       variant="outlined"
                       size="small"
                       value={username}
@@ -546,12 +546,12 @@ const Login = ({ onLogin }) => {
                       }}
                       disabled={loading}
                       sx={inputSx}
-                      placeholder="e.g. John Doe"
+                      placeholder="e.g. Adam"
                     />
 
                     <TextField
                       fullWidth
-                      label="Username or Google Email"
+                      label="Username"
                       variant="outlined"
                       size="small"
                       value={username}
@@ -561,8 +561,8 @@ const Login = ({ onLogin }) => {
                       }}
                       disabled={loading}
                       sx={inputSx}
-                      placeholder="e.g. johndoe or user@gmail.com"
-                      helperText="Username or Google account email"
+                      placeholder="e.g. adam"
+                      helperText="Username"
                     />
 
                     <TextField
@@ -694,7 +694,7 @@ const Login = ({ onLogin }) => {
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          Enter your registered username or Google email and specify a new password. The administrator will review and approve your request.
+          Enter your registered username and specify a new password. The administrator will review and approve your request.
         </Typography>
 
         {forgotError && (
@@ -728,13 +728,13 @@ const Login = ({ onLogin }) => {
             <DialogContent sx={{ px: 0, py: 0 }}>
               <TextField
                 fullWidth
-                label="Username or Google Email"
+                label="Username"
                 size="small"
                 value={forgotUsername}
                 onChange={(e) => setForgotUsername(e.target.value)}
                 disabled={forgotLoading}
                 sx={inputSx}
-                placeholder="e.g. johndoe or user@gmail.com"
+                placeholder="e.g. adam"
                 autoComplete="username"
               />
 

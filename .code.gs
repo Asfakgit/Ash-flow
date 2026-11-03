@@ -28,6 +28,26 @@ const USERS_HEADERS = [
   "reset_password_hash",
   "reset_salt",
   "avatar",
+  "membership_status",
+  "premium_activated_at",
+  "premium_expires_at",
+  "premium_granted_by",
+  "premium_updated_at",
+];
+const PREMIUM_AUDIT_SHEET_NAME = "Premium_Audits";
+const PREMIUM_AUDIT_HEADERS = [
+  "audit_id",
+  "user_id",
+  "username",
+  "action",
+  "previous_status",
+  "new_status",
+  "activation_date",
+  "expiry_date",
+  "admin_id",
+  "admin_username",
+  "timestamp",
+  "notes",
 ];
 
 function doGet(e) {
@@ -41,6 +61,14 @@ function doGet(e) {
       params.type === "audit"
     ) {
       return handleGetAudits_(params);
+    }
+
+    if (
+      params.action === "setup_sheets" ||
+      params.action === "setup" ||
+      params.action === "init_sheets"
+    ) {
+      return json_(setupAshFlowSheets());
     }
 
     let sheetName = DEFAULT_TAB;
@@ -170,6 +198,41 @@ function doPost(e) {
       lock.waitLock(10000);
       lockAcquired = true;
       return handleUpdateProfileAvatar_(data);
+    }
+
+    // ==========================================
+    // 2.2. PREMIUM MEMBERSHIP MANAGEMENT ACTIONS
+    // ==========================================
+    if (
+      action === "admin_manage_premium" ||
+      action === "activate_premium" ||
+      action === "extend_premium" ||
+      action === "revoke_premium" ||
+      action === "manage_premium"
+    ) {
+      lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      lockAcquired = true;
+      return handleAdminManagePremium_(data);
+    }
+
+    if (action === "admin_get_premium_audits") {
+      return handleAdminGetPremiumAudits_(data);
+    }
+
+    if (action === "get_user_subscription") {
+      return handleGetUserSubscription_(data);
+    }
+
+    if (
+      action === "setup_sheets" ||
+      action === "admin_setup_sheets" ||
+      action === "init_sheets"
+    ) {
+      lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      lockAcquired = true;
+      return json_(setupAshFlowSheets());
     }
 
     // ==========================================
@@ -337,12 +400,23 @@ function getTransactionsSheet_() {
   return getUserSheet_(DEFAULT_TAB);
 }
 
+function ensureSheetCapacity_(sheet, minCols) {
+  if (!sheet) return;
+  const currentMax = sheet.getMaxColumns();
+  if (currentMax < minCols) {
+    sheet.insertColumnsAfter(currentMax, minCols - currentMax);
+  }
+}
+
 function getUsersSheet_() {
   const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(USERS_SHEET_NAME);
   }
+
+  // Ensure sheet grid capacity has at least all 19 columns
+  ensureSheetCapacity_(sheet, USERS_HEADERS.length);
 
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(USERS_HEADERS);
@@ -351,7 +425,7 @@ function getUsersSheet_() {
 
     // Seed default Admin user
     const salt = generateRandomString_(16);
-    const hash = hashPassword_("Ashflow@123", salt);
+    const hash = hashPassword_("Ash@flow#123", salt);
     sheet.appendRow([
       1,
       ADMIN_USERNAME,
@@ -367,13 +441,32 @@ function getUsersSheet_() {
       "",
       "",
       "",
+      "PREMIUM",
+      new Date().toISOString(),
+      new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      "SYSTEM",
+      new Date().toISOString(),
     ]);
   } else {
-    // Ensure all modern headers exist
-    const lastCol = sheet.getLastColumn();
-    if (lastCol < USERS_HEADERS.length) {
-      sheet.getRange(1, 1, 1, USERS_HEADERS.length).setValues([USERS_HEADERS]);
-      sheet.getRange(1, 1, 1, USERS_HEADERS.length).setFontWeight("bold");
+    // Write full modern headers across all 19 columns
+    sheet.getRange(1, 1, 1, USERS_HEADERS.length).setValues([USERS_HEADERS]);
+    sheet.getRange(1, 1, 1, USERS_HEADERS.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+
+    // Backfill any existing user rows where membership_status (column 15) is empty
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const statusRange = sheet.getRange(2, 15, lastRow - 1, 1).getValues();
+      let updated = false;
+      for (let i = 0; i < statusRange.length; i++) {
+        if (!statusRange[i][0]) {
+          statusRange[i][0] = "STANDARD";
+          updated = true;
+        }
+      }
+      if (updated) {
+        sheet.getRange(2, 15, lastRow - 1, 1).setValues(statusRange);
+      }
     }
   }
 
@@ -449,6 +542,11 @@ function findUserByUsername_(username) {
         resetPasswordHash: rows[i][11] || "",
         resetSalt: rows[i][12] || "",
         avatar: rows[i][13] || "",
+        membershipStatus: String(rows[i][14] || "STANDARD").toUpperCase(),
+        premiumActivatedAt: rows[i][15] || "",
+        premiumExpiresAt: rows[i][16] || "",
+        premiumGrantedBy: rows[i][17] || "",
+        premiumUpdatedAt: rows[i][18] || "",
       };
     }
   }
@@ -478,6 +576,11 @@ function findUserByToken_(token) {
         resetPasswordHash: rows[i][11] || "",
         resetSalt: rows[i][12] || "",
         avatar: rows[i][13] || "",
+        membershipStatus: String(rows[i][14] || "STANDARD").toUpperCase(),
+        premiumActivatedAt: rows[i][15] || "",
+        premiumExpiresAt: rows[i][16] || "",
+        premiumGrantedBy: rows[i][17] || "",
+        premiumUpdatedAt: rows[i][18] || "",
       };
     }
   }
@@ -528,6 +631,11 @@ function handleRegister_(data) {
     "",
     "",
     "", // avatar
+    "STANDARD", // Col 15: membership_status (Strict default)
+    "",         // Col 16: premium_activated_at
+    "",         // Col 17: premium_expires_at
+    "",         // Col 18: premium_granted_by
+    createdAt,  // Col 19: premium_updated_at
   ]);
 
   return json_({
@@ -620,6 +728,11 @@ function handleLogin_(data) {
   }
   getUserSheet_(sheetName);
 
+  // Validate and auto-expire subscription if past expiry date
+  checkAndExpireSubscription_(user, sheet);
+  const isPremiumActive = user.membershipStatus === "PREMIUM" &&
+    (!user.premiumExpiresAt || new Date(user.premiumExpiresAt).getTime() > Date.now());
+
   return json_({
     success: true,
     token: token,
@@ -632,6 +745,14 @@ function handleLogin_(data) {
       sheetName: sheetName,
       allowAdminView: user.allowAdminView,
       avatar: user.avatar || "",
+      subscription: {
+        membershipStatus: user.membershipStatus || "STANDARD",
+        isPremiumActive: isPremiumActive,
+        activatedAt: user.premiumActivatedAt || "",
+        expiresAt: user.premiumExpiresAt || "",
+        grantedBy: user.premiumGrantedBy || "",
+        updatedAt: user.premiumUpdatedAt || "",
+      },
     },
   });
 }
@@ -648,6 +769,24 @@ function handleAdminGetUsers_(data) {
 
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
+    let memStatus = String(r[14] || "STANDARD").toUpperCase();
+    const actAt = r[15] || "";
+    const expAt = r[16] || "";
+    const grantedBy = r[17] || "";
+    const updatedSubAt = r[18] || "";
+
+    // Server-side automatic expiration verification
+    if (memStatus === "PREMIUM" && expAt) {
+      const expDate = new Date(expAt);
+      if (!isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) {
+        memStatus = "EXPIRED";
+        sheet.getRange(i + 1, 15).setValue("EXPIRED");
+        sheet.getRange(i + 1, 19).setValue(new Date().toISOString());
+      }
+    }
+
+    const isPremiumActive = memStatus === "PREMIUM" && (!expAt || new Date(expAt).getTime() > Date.now());
+
     users.push({
       id: r[0],
       username: r[1],
@@ -658,6 +797,12 @@ function handleAdminGetUsers_(data) {
       createdAt: r[9],
       allowAdminView: String(r[10] || "NO").toUpperCase() === "YES",
       hasResetPending: r[6] === "RESET_PENDING" || Boolean(r[11]),
+      membershipStatus: memStatus,
+      isPremiumActive: isPremiumActive,
+      premiumActivatedAt: actAt,
+      premiumExpiresAt: expAt,
+      premiumGrantedBy: grantedBy,
+      premiumUpdatedAt: updatedSubAt,
     });
   }
 
@@ -1065,9 +1210,302 @@ function handleGetAudits_(data) {
   return json_({ success: true, audits: audits });
 }
 
+// ==========================================
+// 9. PREMIUM MEMBERSHIP REPOSITORY & AUDIT ENGINE
+// ==========================================
+function getPremiumAuditSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(PREMIUM_AUDIT_SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(PREMIUM_AUDIT_SHEET_NAME);
+  }
+
+  // Ensure grid capacity has at least all 12 columns
+  ensureSheetCapacity_(sheet, PREMIUM_AUDIT_HEADERS.length);
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(PREMIUM_AUDIT_HEADERS);
+    sheet.getRange(1, 1, 1, PREMIUM_AUDIT_HEADERS.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  } else {
+    sheet.getRange(1, 1, 1, PREMIUM_AUDIT_HEADERS.length).setValues([PREMIUM_AUDIT_HEADERS]);
+    sheet.getRange(1, 1, 1, PREMIUM_AUDIT_HEADERS.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+
+  return sheet;
+}
+
+function logPremiumAudit_(data) {
+  try {
+    const sheet = getPremiumAuditSheet_();
+    const auditId = "prem_audit_" + Date.now() + "_" + generateRandomString_(6);
+    sheet.appendRow([
+      auditId,
+      String(data.userId || ""),
+      String(data.username || ""),
+      String(data.action || "UPDATE"),
+      String(data.prevStatus || "STANDARD"),
+      String(data.newStatus || "PREMIUM"),
+      String(data.activationDate || ""),
+      String(data.expiryDate || ""),
+      String(data.adminId || ""),
+      String(data.adminUsername || ""),
+      String(data.timestamp || new Date().toISOString()),
+      String(data.notes || ""),
+    ]);
+    return auditId;
+  } catch (err) {
+    Logger.log("Failed to log premium audit: " + err.message);
+    return null;
+  }
+}
+
+function checkAndExpireSubscription_(user, usersSheet) {
+  if (!user) return user;
+  let status = String(user.membershipStatus || "STANDARD").toUpperCase();
+  if (status === "PREMIUM" && user.premiumExpiresAt) {
+    const expDate = new Date(user.premiumExpiresAt);
+    if (!isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) {
+      status = "EXPIRED";
+      user.membershipStatus = "EXPIRED";
+      if (usersSheet && user.rowIndex) {
+        usersSheet.getRange(user.rowIndex, 15).setValue("EXPIRED");
+        usersSheet.getRange(user.rowIndex, 19).setValue(new Date().toISOString());
+      }
+      logPremiumAudit_({
+        userId: user.id,
+        username: user.username,
+        action: "EXPIRE",
+        prevStatus: "PREMIUM",
+        newStatus: "EXPIRED",
+        activationDate: user.premiumActivatedAt || "",
+        expiryDate: user.premiumExpiresAt || "",
+        adminId: "SYSTEM",
+        adminUsername: "system",
+        notes: "Automatic subscription expiration verified by backend timestamp check",
+      });
+    }
+  }
+  user.isPremiumActive = status === "PREMIUM" && (!user.premiumExpiresAt || new Date(user.premiumExpiresAt).getTime() > Date.now());
+  return user;
+}
+
+function handleAdminManagePremium_(data) {
+  const adminUser = findUserByToken_(data.token);
+  if (!adminUser || adminUser.role !== "ADMIN" || adminUser.status !== "APPROVED") {
+    return json_({ success: false, message: "Unauthorized. Admin privileges required." });
+  }
+
+  const targetUsername = String(data.targetUsername || "").trim().toLowerCase();
+  const targetUser = findUserByUsername_(targetUsername);
+  if (!targetUser) {
+    return json_({ success: false, message: "Target user not found." });
+  }
+
+  // Support sub-action passed via actionType, subAction, action_type, membershipAction, or data.action
+  const rawSubAction =
+    data.actionType ||
+    data.subAction ||
+    data.action_type ||
+    data.membershipAction ||
+    data.type ||
+    (String(data.action || "").toLowerCase() !== "admin_manage_premium" ? data.action : "");
+  const action = String(rawSubAction || "").trim().toUpperCase(); // ACTIVATE, EXTEND, DEACTIVATE, REVOKE
+
+  const sheet = getUsersSheet_();
+  ensureSheetCapacity_(sheet, USERS_HEADERS.length);
+  checkAndExpireSubscription_(targetUser, sheet);
+
+  const prevStatus = targetUser.membershipStatus || "STANDARD";
+  let newStatus = prevStatus;
+  let activationDate = targetUser.premiumActivatedAt || "";
+  let expiryDate = targetUser.premiumExpiresAt || "";
+  const nowIso = new Date().toISOString();
+  const notes = String(data.notes || "").trim();
+
+  if (action === "ACTIVATE") {
+    newStatus = "PREMIUM";
+    activationDate = data.activationDate ? new Date(data.activationDate).toISOString() : nowIso;
+    if (data.expiryDate) {
+      expiryDate = new Date(data.expiryDate).toISOString();
+    } else {
+      expiryDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    }
+  } else if (action === "EXTEND") {
+    newStatus = "PREMIUM";
+    if (!activationDate) activationDate = nowIso;
+    if (!data.expiryDate) {
+      return json_({ success: false, message: "Expiry date is required to extend subscription." });
+    }
+    expiryDate = new Date(data.expiryDate).toISOString();
+  } else if (action === "DEACTIVATE" || action === "REVOKE") {
+    newStatus = "REVOKED";
+  } else {
+    return json_({
+      success: false,
+      message: "Invalid action. Supported: ACTIVATE, EXTEND, DEACTIVATE, REVOKE.",
+      received: { action: data.action, actionType: data.actionType, subAction: data.subAction }
+    });
+  }
+
+  // Column updates in Users sheet:
+  // Col 15: membership_status
+  // Col 16: premium_activated_at
+  // Col 17: premium_expires_at
+  // Col 18: premium_granted_by
+  // Col 19: premium_updated_at
+  sheet.getRange(targetUser.rowIndex, 15).setValue(newStatus);
+  sheet.getRange(targetUser.rowIndex, 16).setValue(activationDate);
+  sheet.getRange(targetUser.rowIndex, 17).setValue(expiryDate);
+  sheet.getRange(targetUser.rowIndex, 18).setValue(adminUser.username);
+  sheet.getRange(targetUser.rowIndex, 19).setValue(nowIso);
+
+  // Log complete audit history
+  logPremiumAudit_({
+    userId: targetUser.id,
+    username: targetUser.username,
+    action: action,
+    prevStatus: prevStatus,
+    newStatus: newStatus,
+    activationDate: activationDate,
+    expiryDate: expiryDate,
+    adminId: adminUser.id,
+    adminUsername: adminUser.username,
+    notes: notes || (action + " by Admin @" + adminUser.username),
+  });
+
+  const isPremiumActive = newStatus === "PREMIUM" && (!expiryDate || new Date(expiryDate).getTime() > Date.now());
+
+  return json_({
+    success: true,
+    message: "Premium subscription " + action.toLowerCase() + "d successfully for @" + targetUsername + ".",
+    subscription: {
+      membershipStatus: newStatus,
+      isPremiumActive: isPremiumActive,
+      activatedAt: activationDate,
+      expiresAt: expiryDate,
+      grantedBy: adminUser.username,
+      updatedAt: nowIso,
+    },
+  });
+}
+
+function handleAdminGetPremiumAudits_(data) {
+  const adminUser = findUserByToken_(data.token);
+  if (!adminUser || adminUser.role !== "ADMIN" || adminUser.status !== "APPROVED") {
+    return json_({ success: false, message: "Unauthorized. Admin privileges required." });
+  }
+
+  const sheet = getPremiumAuditSheet_();
+  const rows = sheet.getDataRange().getValues();
+  const audits = [];
+
+  const targetUsername = data.targetUsername ? String(data.targetUsername).trim().toLowerCase() : null;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const uName = String(row[2] || "").trim().toLowerCase();
+    if (targetUsername && uName !== targetUsername) {
+      continue;
+    }
+    audits.push({
+      auditId: row[0],
+      userId: row[1],
+      username: row[2],
+      action: row[3],
+      previousStatus: row[4],
+      newStatus: row[5],
+      activationDate: row[6],
+      expiryDate: row[7],
+      adminId: row[8],
+      adminUsername: row[9],
+      timestamp: row[10],
+      notes: row[11],
+    });
+  }
+
+  audits.reverse();
+
+  return json_({
+    success: true,
+    audits: audits,
+  });
+}
+
+function handleGetUserSubscription_(data) {
+  const user = findUserByToken_(data.token);
+  if (!user || user.status !== "APPROVED") {
+    return json_({
+      success: false,
+      error: "UNAUTHORIZED",
+      message: "Invalid or expired session.",
+    });
+  }
+
+  const sheet = getUsersSheet_();
+  checkAndExpireSubscription_(user, sheet);
+
+  const isPremiumActive = user.membershipStatus === "PREMIUM" &&
+    (!user.premiumExpiresAt || new Date(user.premiumExpiresAt).getTime() > Date.now());
+
+  return json_({
+    success: true,
+    isPremiumActive: isPremiumActive,
+    subscription: {
+      membershipStatus: user.membershipStatus || "STANDARD",
+      isPremiumActive: isPremiumActive,
+      activatedAt: user.premiumActivatedAt || "",
+      expiresAt: user.premiumExpiresAt || "",
+      grantedBy: user.premiumGrantedBy || "",
+      updatedAt: user.premiumUpdatedAt || "",
+    },
+  });
+}
+
 function json_(value) {
   return ContentService
     .createTextOutput(JSON.stringify(value))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+/**
+ * Run this function from Google Apps Script Editor dropdown (setupAshFlowSheets -> Run)
+ * or via API (action: "setup_sheets").
+ * Automatically creates & expands:
+ * - 'transactions' (DEFAULT_TAB)
+ * - 'Users' (19 columns with all headers and defaults)
+ * - 'Premium_Audits' (12 columns with audit headers)
+ */
+function setupAshFlowSheets() {
+  try {
+    // 1. Transactions Sheet
+    const txSheet = getTransactionsSheet_();
+
+    // 2. Users Sheet (with 19 columns)
+    const usersSheet = getUsersSheet_();
+
+    // 3. Premium Audits Sheet (with 12 columns)
+    const auditSheet = getPremiumAuditSheet_();
+
+    Logger.log("✅ AshFlow sheets successfully verified and expanded.");
+    return {
+      success: true,
+      message: "AshFlow sheets & columns verified and expanded successfully.",
+      usersSheet: usersSheet.getName(),
+      usersColumns: usersSheet.getMaxColumns(),
+      usersRows: usersSheet.getLastRow(),
+      auditSheet: auditSheet.getName(),
+      auditColumns: auditSheet.getMaxColumns(),
+      timestamp: new Date().toISOString(),
+    };
+  } catch (err) {
+    Logger.log("❌ setupAshFlowSheets error: " + err.message);
+    return {
+      success: false,
+      message: "Setup failed: " + err.message,
+    };
+  }
+}
+
 

@@ -33,6 +33,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ShieldIcon from "@mui/icons-material/Shield";
+import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
 import soundEffects from "../Services/soundEffects";
 import { getDataRows, getRowVal } from "../Services/SheetService";
 
@@ -576,18 +577,20 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             <AssessmentIcon sx={{ fontSize: { xs: 17, sm: 22 } }} />
           </Box>
           <Box>
-            <Typography
-              variant="h6"
-              fontWeight="800"
-              sx={{
-                color: theme.palette.text.primary,
-                fontSize: { xs: "0.95rem", sm: "1.2rem" },
-                letterSpacing: "-0.02em",
-                lineHeight: 1.15,
-              }}
-            >
-              Reports & Analytics
-            </Typography>
+            <Box display="flex" alignItems="center" gap={0.8}>
+              <Typography
+                variant="h6"
+                fontWeight="800"
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: { xs: "0.95rem", sm: "1.2rem" },
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.15,
+                }}
+              >
+                Reports & Analytics
+              </Typography>
+            </Box>
             <Typography
               variant="caption"
               sx={{

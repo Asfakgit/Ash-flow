@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const SHEETS_API_URL =
   import.meta.env.VITE_SHEETS_API_URL ||
-  "https://script.google.com/macros/s/AKfycbxr4pcI_H0wUDoQiGYyFSzBauPQiFp4PckrVWIyh9-bzik0BEXk2SK8qudGh0yfJonx/exec";
+  "https://script.google.com/macros/s/AKfycbz5y19U14T-4sPdnstg5gHT7jh-lgDloq-RBpyj2p9bUEiRTRSdBgV1nG2K4vx1NaC6/exec";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -570,14 +570,28 @@ export const loginUser = async (username, password) => {
 
     if (result && typeof result === "object") {
       if (result.success && result.token) {
+        const localSubs = getLocalSubscriptions();
+        const local = localSubs[trimmedUser];
+        let userToSave = result.user;
+        if (local && local.membershipStatus) {
+          const exp = local.expiresAt ? new Date(local.expiresAt).getTime() : null;
+          const isAct = local.membershipStatus === "PREMIUM" && (!exp || exp > Date.now());
+          userToSave = {
+            ...result.user,
+            membershipStatus: local.membershipStatus,
+            isPremiumActive: isAct,
+            premiumExpiresAt: local.expiresAt || result.user?.premiumExpiresAt,
+            subscription: local,
+          };
+        }
         setAuthToken(result.token);
-        setAuthUser(result.user);
-        if (result.user?.avatar) {
-          setUserAvatar(result.user.avatar, result.user);
+        setAuthUser(userToSave);
+        if (userToSave?.avatar) {
+          setUserAvatar(userToSave.avatar, userToSave);
         }
         localStorage.setItem("isAuthenticated", "true");
         window.dispatchEvent(new Event("avatar_updated"));
-        return { success: true, user: result.user, token: result.token };
+        return { success: true, user: userToSave, token: result.token };
       }
 
       // Check if the current backend is legacy and returned "Invalid Action"
@@ -601,7 +615,7 @@ export const loginUser = async (username, password) => {
 
 const handleLegacyAdminLoginFallback = (username, password, errMsg = "") => {
   const validUsername = String(import.meta.env.VITE_APP_USERNAME || "ashflow").trim().toLowerCase();
-  const validPassword = String(import.meta.env.VITE_APP_PASSWORD || "Ashflow@123").trim();
+  const validPassword = String(import.meta.env.VITE_APP_PASSWORD || "Ash@flow#123").trim();
 
   if (username === validUsername && password === validPassword) {
     const adminUser = {
@@ -612,6 +626,15 @@ const handleLegacyAdminLoginFallback = (username, password, errMsg = "") => {
       status: "APPROVED",
       sheetName: "transactions",
       isLegacyFallback: true,
+      membershipStatus: "PREMIUM",
+      subscription: {
+        membershipStatus: "PREMIUM",
+        isPremiumActive: true,
+        activatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        grantedBy: "SYSTEM",
+        updatedAt: new Date().toISOString(),
+      },
     };
     const mockToken = "legacy_admin_token_" + Date.now();
     setAuthToken(mockToken);
@@ -702,7 +725,25 @@ export const adminGetUsers = async () => {
 
     const result = res.data;
     if (result && result.success) {
-      return { success: true, users: result.users || [] };
+      const localSubs = getLocalSubscriptions();
+      const mergedUsers = (result.users || []).map((u) => {
+        const local = localSubs[String(u.username || "").toLowerCase()];
+        if (local && local.membershipStatus) {
+          const exp = local.expiresAt ? new Date(local.expiresAt).getTime() : null;
+          const isAct = local.membershipStatus === "PREMIUM" && (!exp || exp > Date.now());
+          return {
+            ...u,
+            membershipStatus: local.membershipStatus,
+            isPremiumActive: isAct,
+            premiumActivatedAt: local.activatedAt || u.premiumActivatedAt,
+            premiumExpiresAt: local.expiresAt || u.premiumExpiresAt,
+            premiumGrantedBy: local.grantedBy || u.premiumGrantedBy,
+            premiumUpdatedAt: local.updatedAt || u.premiumUpdatedAt,
+          };
+        }
+        return u;
+      });
+      return { success: true, users: mergedUsers };
     }
 
     throw new Error(result?.message || "Failed to load users list");
@@ -1051,6 +1092,362 @@ export const adminGetUserTransactions = async (targetUsername) => {
     throw new Error(result?.message || "Failed to fetch user sheet transactions.");
   } catch (err) {
     console.error("adminGetUserTransactions error:", err);
+    throw err;
+  }
+};
+
+// =======================
+// PREMIUM MEMBERSHIP & AUDIT ENGINE
+// =======================
+const PREMIUM_AUDITS_KEY = "money_app_premium_audits";
+const SUBSCRIPTIONS_KEY = "ashflow_user_subscriptions";
+
+export const getLocalSubscriptions = () => {
+  try {
+    const raw = localStorage.getItem(SUBSCRIPTIONS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+export const saveLocalSubscription = (username, sub) => {
+  if (!username) return;
+  try {
+    const map = getLocalSubscriptions();
+    map[String(username).toLowerCase().trim()] = sub;
+    localStorage.setItem(SUBSCRIPTIONS_KEY, JSON.stringify(map));
+  } catch (err) {
+    console.warn("Failed to persist local subscription:", err);
+  }
+};
+
+export const getLocalPremiumAudits = () => {
+  try {
+    const raw = localStorage.getItem(PREMIUM_AUDITS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalPremiumAudit = (auditEntry) => {
+  try {
+    const list = getLocalPremiumAudits();
+    list.unshift(auditEntry);
+    localStorage.setItem(PREMIUM_AUDITS_KEY, JSON.stringify(list.slice(0, 500)));
+  } catch (err) {
+    console.warn("Failed to persist local premium audit:", err);
+  }
+};
+
+export const isUserPremium = (user) => {
+  const u = user || getAuthUser();
+  if (!u) return false;
+  const sub = u.subscription || {};
+  let status = String(sub.membershipStatus || u.membershipStatus || "").toUpperCase();
+  let exp = sub.expiresAt || u.premiumExpiresAt;
+
+  // Check persisted subscriptions store
+  if (status !== "PREMIUM" && u.username) {
+    const localSubs = getLocalSubscriptions();
+    const local = localSubs[String(u.username).toLowerCase().trim()];
+    if (local && String(local.membershipStatus).toUpperCase() === "PREMIUM") {
+      status = "PREMIUM";
+      exp = local.expiresAt;
+    }
+  }
+
+  if (status !== "PREMIUM") return false;
+  if (exp) {
+    const expTime = new Date(exp).getTime();
+    if (!isNaN(expTime) && expTime <= Date.now()) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export const adminManagePremium = async ({
+  targetUsername,
+  action,
+  activationDate,
+  expiryDate,
+  notes,
+}) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  const cleanUser = String(targetUsername || "").trim().toLowerCase();
+  const cleanAction = String(action || "").toUpperCase();
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_manage_premium",
+        token: token,
+        targetUsername: cleanUser,
+        actionType: cleanAction,
+        subAction: cleanAction,
+        action_type: cleanAction,
+        membershipAction: cleanAction,
+        activationDate: activationDate || new Date().toISOString(),
+        expiryDate: expiryDate || "",
+        notes: notes || "",
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+        timeout: 10000,
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success) {
+      const currAdmin = getAuthUser();
+      const sub = result.subscription || {
+        membershipStatus: cleanAction === "REVOKE" || cleanAction === "DEACTIVATE" ? "REVOKED" : "PREMIUM",
+        isPremiumActive: cleanAction !== "REVOKE" && cleanAction !== "DEACTIVATE",
+        activatedAt: activationDate || new Date().toISOString(),
+        expiresAt: expiryDate || "",
+        grantedBy: currAdmin?.username || "admin",
+        updatedAt: new Date().toISOString(),
+      };
+      saveLocalSubscription(cleanUser, sub);
+
+      saveLocalPremiumAudit({
+        auditId: "prem_audit_" + Date.now(),
+        userId: cleanUser,
+        username: cleanUser,
+        action: cleanAction,
+        previousStatus: "",
+        newStatus: sub.membershipStatus,
+        activationDate: sub.activatedAt,
+        expiryDate: sub.expiresAt,
+        adminId: currAdmin?.id || "admin",
+        adminUsername: currAdmin?.username || "admin",
+        timestamp: new Date().toISOString(),
+        notes: notes || "",
+      });
+
+      // If updating currently logged in user, refresh session
+      if (currAdmin && currAdmin.username.toLowerCase() === cleanUser) {
+        currAdmin.subscription = sub;
+        currAdmin.membershipStatus = sub.membershipStatus;
+        currAdmin.premiumExpiresAt = sub.expiresAt;
+        setAuthUser(currAdmin);
+        window.dispatchEvent(new Event("auth_user_updated"));
+      }
+
+      return result;
+    }
+
+    throw new Error(result?.message || `Failed to ${cleanAction.toLowerCase()} premium subscription.`);
+  } catch (err) {
+    const currAdmin = getAuthUser();
+    if (currAdmin?.role === "ADMIN") {
+      const nowIso = new Date().toISOString();
+      const newStatus = cleanAction === "REVOKE" || cleanAction === "DEACTIVATE" ? "REVOKED" : "PREMIUM";
+      const isAct = newStatus === "PREMIUM" && (!expiryDate || new Date(expiryDate).getTime() > Date.now());
+
+      const sub = {
+        membershipStatus: newStatus,
+        isPremiumActive: isAct,
+        activatedAt: activationDate || nowIso,
+        expiresAt: expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        grantedBy: currAdmin.username,
+        updatedAt: nowIso,
+      };
+
+      saveLocalSubscription(cleanUser, sub);
+
+      saveLocalPremiumAudit({
+        auditId: "local_audit_" + Date.now(),
+        userId: cleanUser,
+        username: cleanUser,
+        action: cleanAction,
+        previousStatus: "STANDARD",
+        newStatus: newStatus,
+        activationDate: sub.activatedAt,
+        expiryDate: sub.expiresAt,
+        adminId: currAdmin.id,
+        adminUsername: currAdmin.username,
+        timestamp: nowIso,
+        notes: notes || `Offline ${cleanAction} by admin`,
+      });
+
+      if (currAdmin.username.toLowerCase() === cleanUser) {
+        currAdmin.subscription = sub;
+        currAdmin.membershipStatus = newStatus;
+        currAdmin.premiumExpiresAt = sub.expiresAt;
+        setAuthUser(currAdmin);
+        window.dispatchEvent(new Event("auth_user_updated"));
+      }
+
+      return {
+        success: true,
+        message: `Premium subscription ${cleanAction.toLowerCase()}d successfully.`,
+        subscription: sub,
+      };
+    }
+    console.error("adminManagePremium error:", err);
+    throw err;
+  }
+};
+
+export const adminGetPremiumAudits = async (targetUsername = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  const cleanTarget = targetUsername ? String(targetUsername).trim().toLowerCase() : null;
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "admin_get_premium_audits",
+        token: token,
+        targetUsername: cleanTarget,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+        timeout: 9000,
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success && Array.isArray(result.audits)) {
+      return { success: true, audits: result.audits };
+    }
+  } catch (err) {
+    console.warn("adminGetPremiumAudits server fetch failed, using local audit cache:", err);
+  }
+
+  const localList = getLocalPremiumAudits();
+  const filtered = cleanTarget
+    ? localList.filter((a) => String(a.username).toLowerCase() === cleanTarget)
+    : localList;
+
+  return { success: true, audits: filtered };
+};
+
+export const getUserSubscription = async () => {
+  const token = getAuthToken();
+  const currUser = getAuthUser();
+  if (!token || !currUser) {
+    return {
+      success: false,
+      isPremiumActive: false,
+      subscription: { membershipStatus: "STANDARD" },
+    };
+  }
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "get_user_subscription",
+        token: token,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+        timeout: 7000,
+      }
+    );
+
+    const result = res.data;
+    if (result && result.success && result.subscription) {
+      const localSubs = getLocalSubscriptions();
+      const local = localSubs[String(currUser.username || "").toLowerCase()];
+      let subToUse = result.subscription;
+      if (local && local.membershipStatus === "PREMIUM") {
+        const exp = local.expiresAt ? new Date(local.expiresAt).getTime() : null;
+        if (!exp || exp > Date.now()) {
+          subToUse = local;
+        }
+      }
+      saveLocalSubscription(currUser.username, subToUse);
+
+      const isAct = subToUse.membershipStatus === "PREMIUM" && (!subToUse.expiresAt || new Date(subToUse.expiresAt).getTime() > Date.now());
+      const updatedUser = {
+        ...currUser,
+        subscription: subToUse,
+        membershipStatus: subToUse.membershipStatus,
+        premiumExpiresAt: subToUse.expiresAt,
+        isPremiumActive: isAct,
+      };
+      setAuthUser(updatedUser);
+      window.dispatchEvent(new Event("auth_user_updated"));
+
+      return {
+        success: true,
+        isPremiumActive: isAct,
+        subscription: subToUse,
+      };
+    }
+  } catch (err) {
+    console.warn("getUserSubscription online check failed, using local session:", err);
+  }
+
+  // Local verification fallback
+  const localSubs = getLocalSubscriptions();
+  const local = localSubs[String(currUser.username || "").toLowerCase()];
+  const sub = local || currUser.subscription || {};
+  let status = String(sub.membershipStatus || currUser.membershipStatus || "STANDARD").toUpperCase();
+  const expiresAt = sub.expiresAt || currUser.premiumExpiresAt;
+
+  if (status === "PREMIUM" && expiresAt) {
+    const expTime = new Date(expiresAt).getTime();
+    if (!isNaN(expTime) && expTime <= Date.now()) {
+      status = "EXPIRED";
+      sub.membershipStatus = "EXPIRED";
+      sub.isPremiumActive = false;
+      currUser.subscription = sub;
+      currUser.membershipStatus = "EXPIRED";
+      setAuthUser(currUser);
+      window.dispatchEvent(new Event("auth_user_updated"));
+    }
+  }
+
+  const isAct = status === "PREMIUM" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+
+  return {
+    success: true,
+    isPremiumActive: isAct,
+    subscription: {
+      membershipStatus: status,
+      isPremiumActive: isAct,
+      activatedAt: sub.activatedAt || "",
+      expiresAt: expiresAt || "",
+      grantedBy: sub.grantedBy || "",
+      updatedAt: sub.updatedAt || "",
+    },
+  };
+};
+
+export const adminSetupSheets = async () => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token required");
+
+  try {
+    const res = await axios.post(
+      SHEETS_API_URL,
+      JSON.stringify({
+        action: "setup_sheets",
+        token: token,
+      }),
+      {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        transformResponse: (raw) => normalizeResponseData(raw),
+        timeout: 15000,
+      }
+    );
+    return res.data;
+  } catch (err) {
+    console.error("adminSetupSheets error:", err);
     throw err;
   }
 };

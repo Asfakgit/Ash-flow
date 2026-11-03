@@ -23,6 +23,7 @@ import {
   Divider,
   Tooltip,
   IconButton,
+  Button,
 } from "@mui/material";
 
 import SearchIcon from "@mui/icons-material/Search";
@@ -62,9 +63,9 @@ function Transactions({
 
     const person = String(getRowVal(row, 1, "person", "")).toLowerCase();
     const amountNum = parseFloat(getRowVal(row, 2, "amount", 0)) || 0;
+    const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
     const amountStr = String(amountNum);
     const amountFormatted = amountNum.toLocaleString("en-IN").toLowerCase();
-    const type = String(getRowVal(row, 3, "type", "")).toLowerCase();
     const rawDate = String(getRowVal(row, 4, "date", "")).toLowerCase();
     const displayDate = formatDateDisplay(rawDate).toLowerCase();
     const notes = String(getRowVal(row, 5, "notes", "")).toLowerCase();
@@ -128,7 +129,7 @@ function Transactions({
                 fontSize: { xs: "0.75rem", sm: "0.875rem" },
               }}
             >
-              {rows.length} {rows.length === 1 ? "record" : "records"} found
+              {filteredRows.length} {filteredRows.length === 1 ? "record" : "records"} found
             </Typography>
           </Box>
         </Box>

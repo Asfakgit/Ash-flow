@@ -17,7 +17,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { useTheme } from "@mui/material/styles";
 import logo from "../assets/logo.png";
 import SettingsModal from "./SettingsModal";
-import { getUserAvatar } from "../Services/SheetService";
+import { getUserAvatar, isUserPremium } from "../Services/SheetService";
 
 function Navbar({
   onOpenReports,
@@ -49,6 +49,7 @@ function Navbar({
   }, [currentUser]);
 
   const isAdmin = currentUser?.role === "ADMIN";
+  const isPremium = isUserPremium(currentUser);
 
   return (
     <AppBar
@@ -126,18 +127,20 @@ function Navbar({
               />
             </Box>
             <Box>
-              <Typography
-                variant="h6"
-                fontWeight="800"
-                sx={{
-                  letterSpacing: "-0.02em",
-                  color: theme.palette.text.primary,
-                  lineHeight: 1.1,
-                  fontSize: { xs: "0.95rem", sm: "1.2rem" },
-                }}
-              >
-                ASH FLOW
-              </Typography>
+              <Box display="flex" alignItems="center" gap={0.8}>
+                <Typography
+                  variant="h6"
+                  fontWeight="800"
+                  sx={{
+                    letterSpacing: "-0.02em",
+                    color: theme.palette.text.primary,
+                    lineHeight: 1.1,
+                    fontSize: { xs: "0.95rem", sm: "1.2rem" },
+                  }}
+                >
+                  ASH FLOW
+                </Typography>
+              </Box>
               <Typography
                 variant="caption"
                 sx={{
@@ -164,6 +167,26 @@ function Navbar({
             {currentUser && (
               <Chip
                 size="small"
+                icon={
+                  isPremium ? (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#E5C158",
+                        ml: "6px !important",
+                        mr: "-2px !important",
+                        filter: "drop-shadow(0 0 3px rgba(229, 193, 88, 0.6))",
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M5 19H19V17H5V19ZM3.5 8L6.5 15H17.5L20.5 8L15 11.5L12 5L9 11.5L3.5 8Z" />
+                      </svg>
+                    </Box>
+                  ) : undefined
+                }
                 label={currentUser.fullName || currentUser.username}
                 sx={{
                   display: { xs: "none", md: "inline-flex" },
@@ -174,12 +197,16 @@ function Navbar({
                   borderRadius: "8px",
                   cursor: "default",
                   userSelect: "none",
-                  background:
-                    theme.palette.mode === "dark"
-                      ? "rgba(255, 255, 255, 0.05)"
-                      : "rgba(0, 0, 0, 0.05)",
-                  border: `1px solid ${theme.palette.divider}`,
-                  color: theme.palette.text.primary,
+                  background: isPremium
+                    ? "linear-gradient(135deg, rgba(229, 193, 88, 0.12) 0%, rgba(25, 25, 30, 0.8) 100%)"
+                    : theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)",
+                  border: isPremium
+                    ? "1px solid rgba(229, 193, 88, 0.35)"
+                    : `1px solid ${theme.palette.divider}`,
+                  color: isPremium ? "#F5D77F" : theme.palette.text.primary,
+                  boxShadow: isPremium ? "0 0 10px rgba(229, 193, 88, 0.12)" : "none",
                 }}
               />
             )}

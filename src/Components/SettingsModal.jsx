@@ -28,6 +28,8 @@ import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import FavoriteIcon from "@mui/icons-material/Favorite";
+import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { ThemeContext } from "../ThemeContext";
 import {
   getAuthUser,
@@ -35,6 +37,7 @@ import {
   getCachedTransactions,
   getUserAvatar,
   updateUserProfileAvatar,
+  isUserPremium,
 } from "../Services/SheetService";
 
 const Transition = forwardRef(function Transition(props, ref) {
@@ -312,7 +315,9 @@ export default function SettingsModal({
               theme.palette.mode === "dark"
                 ? "rgba(255, 255, 255, 0.03)"
                 : "rgba(0, 0, 0, 0.02)",
-            border: `1px solid ${theme.palette.divider}`,
+            border: isUserPremium(userObj)
+              ? "1px solid rgba(229, 193, 88, 0.4)"
+              : `1px solid ${theme.palette.divider}`,
             display: "flex",
             alignItems: "center",
             gap: 2,
@@ -328,8 +333,12 @@ export default function SettingsModal({
                 borderRadius: "50%",
                 cursor: "pointer",
                 overflow: "hidden",
-                border: `2px solid ${theme.palette.primary.main}`,
-                boxShadow: `0 4px 16px ${theme.palette.primary.main}38`,
+                border: isUserPremium(userObj)
+                  ? "2px solid #E5C158"
+                  : `2px solid ${theme.palette.primary.main}`,
+                boxShadow: isUserPremium(userObj)
+                  ? "0 4px 16px rgba(229, 193, 88, 0.35)"
+                  : `0 4px 16px ${theme.palette.primary.main}38`,
                 position: "relative",
                 display: "flex",
                 alignItems: "center",
@@ -353,8 +362,10 @@ export default function SettingsModal({
                   sx={{
                     width: "100%",
                     height: "100%",
-                    bgcolor: `${theme.palette.primary.main}22`,
-                    color: theme.palette.primary.main,
+                    bgcolor: isUserPremium(userObj)
+                      ? "rgba(229, 193, 88, 0.18)"
+                      : `${theme.palette.primary.main}22`,
+                    color: isUserPremium(userObj) ? "#F5D77F" : theme.palette.primary.main,
                     fontWeight: 900,
                     fontSize: "1.3rem",
                   }}
@@ -424,7 +435,7 @@ export default function SettingsModal({
                 {userObj?.fullName || "User"}
               </Typography>
 
-              {isAdmin ? (
+              {isAdmin && (
                 <Chip
                   size="small"
                   label="ADMIN"
@@ -435,6 +446,26 @@ export default function SettingsModal({
                     bgcolor: `${theme.palette.primary.main}22`,
                     color: theme.palette.primary.main,
                     border: `1px solid ${theme.palette.primary.main}44`,
+                  }}
+                />
+              )}
+
+              {isUserPremium(userObj) ? (
+                <Chip
+                  size="small"
+                  label="PREMIUM"
+                  icon={
+                    <WorkspacePremiumIcon
+                      sx={{ fontSize: "13px !important", color: "#F5D77F !important" }}
+                    />
+                  }
+                  sx={{
+                    height: 19,
+                    fontSize: "0.62rem",
+                    fontWeight: 800,
+                    backgroundColor: "rgba(229, 193, 88, 0.2)",
+                    color: "#F5D77F",
+                    border: "1px solid rgba(229, 193, 88, 0.45)",
                   }}
                 />
               ) : (
@@ -452,16 +483,29 @@ export default function SettingsModal({
               )}
             </Box>
 
-            <Typography
-              variant="caption"
-              sx={{
-                color: theme.palette.text.secondary,
-                fontWeight: 500,
-                display: "block",
-              }}
-            >
-              @{userObj?.username || "ashflow"}
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1.2} flexWrap="wrap">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontWeight: 500,
+                }}
+              >
+                @{userObj?.username || "ashflow"}
+              </Typography>
+
+              {isUserPremium(userObj) && (userObj?.subscription?.expiresAt || userObj?.premiumExpiresAt) && (
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <AccessTimeIcon sx={{ fontSize: 13, color: "#E5C158" }} />
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#F5D77F", fontWeight: 700, fontSize: "0.72rem" }}
+                  >
+                    Valid until: {new Date(userObj.subscription?.expiresAt || userObj?.premiumExpiresAt).toLocaleDateString()}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
 
             {/* Simple clean photo buttons */}
             <Box display="flex" alignItems="center" gap={1.2} mt={0.8}>

@@ -26,6 +26,7 @@ import {
   adminGetUsers,
   isUserAuthenticated,
   clearAuthSession,
+  getUserSubscription,
 } from "./Services/SheetService";
 
 const financialQuotes = [
@@ -150,6 +151,33 @@ function App() {
       },
     });
   };
+
+  // Listen for user updates (e.g. avatar, subscription updates)
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      setCurrentUser(getAuthUser());
+    };
+    window.addEventListener("auth_user_updated", handleUserUpdate);
+    window.addEventListener("storage", handleUserUpdate);
+    return () => {
+      window.removeEventListener("auth_user_updated", handleUserUpdate);
+      window.removeEventListener("storage", handleUserUpdate);
+    };
+  }, []);
+
+  // Backend verification of subscription validity on session start & refresh
+  useEffect(() => {
+    if (isAuthenticated) {
+      getUserSubscription()
+        .then((res) => {
+          if (res && res.subscription) {
+            const u = getAuthUser();
+            if (u) setCurrentUser(u);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated, refresh]);
 
   // Poll or check pending users count when admin is logged in
   useEffect(() => {
