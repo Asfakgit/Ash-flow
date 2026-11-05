@@ -65,7 +65,8 @@ export const sendSheetPost = async (payload, timeoutMs = 15000) => {
 };
 
 export const sendSheetGet = async (url, timeoutMs = 15000) => {
-  if (!url) {
+  const activeUrl = url || SHEETS_API_URL || DEFAULT_SHEETS_API_URL;
+  if (!activeUrl) {
     throw new Error("No URL provided");
   }
 
@@ -74,7 +75,7 @@ export const sendSheetGet = async (url, timeoutMs = 15000) => {
     const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(activeUrl, {
         method: "GET",
         redirect: "follow",
         signal: controller ? controller.signal : undefined,
@@ -95,7 +96,7 @@ export const sendSheetGet = async (url, timeoutMs = 15000) => {
     }
   }
 
-  return axios.get(url, {
+  return axios.get(activeUrl, {
     transformResponse: (raw) => normalizeResponseData(raw),
     timeout: timeoutMs,
   });
