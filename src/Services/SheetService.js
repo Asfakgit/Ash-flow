@@ -1,7 +1,12 @@
 import axios from "axios";
 
+export const DEFAULT_SHEETS_API_URL =
+  "https://script.google.com/macros/s/AKfycbxyZ3QPFJC6NLapAA5oCJyh5hEYEVlYyztXyRBB2_HBrCuH4_IfeaZHSp58nNBmDxP7/exec";
+
 export const SHEETS_API_URL =
-  (typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_SHEETS_API_URL : process.env.VITE_SHEETS_API_URL) || "";
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_SHEETS_API_URL) ||
+  (typeof globalThis !== "undefined" && globalThis.process?.env?.VITE_SHEETS_API_URL) ||
+  DEFAULT_SHEETS_API_URL;
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -15,7 +20,8 @@ const normalizeResponseData = (data) => {
 };
 
 export const sendSheetPost = async (payload, timeoutMs = 15000) => {
-  if (!SHEETS_API_URL) {
+  const activeUrl = SHEETS_API_URL || DEFAULT_SHEETS_API_URL;
+  if (!activeUrl) {
     throw new Error("No Google Sheets API URL configured");
   }
 
@@ -26,7 +32,7 @@ export const sendSheetPost = async (payload, timeoutMs = 15000) => {
     const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
     try {
-      const response = await fetch(SHEETS_API_URL, {
+      const response = await fetch(activeUrl, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain",
@@ -51,7 +57,7 @@ export const sendSheetPost = async (payload, timeoutMs = 15000) => {
     }
   }
 
-  return axios.post(SHEETS_API_URL, jsonString, {
+  return axios.post(activeUrl, jsonString, {
     headers: { "Content-Type": "text/plain" },
     transformResponse: (raw) => normalizeResponseData(raw),
     timeout: timeoutMs,
@@ -1519,9 +1525,10 @@ export const getTransactions = async () => {
 
   try {
     const token = getAuthToken();
+    const activeUrl = SHEETS_API_URL || DEFAULT_SHEETS_API_URL;
     const url = token
-      ? `${SHEETS_API_URL}?token=${encodeURIComponent(token)}`
-      : SHEETS_API_URL;
+      ? `${activeUrl}?token=${encodeURIComponent(token)}`
+      : activeUrl;
 
     const { data } = await sendSheetGet(url, 10000);
 
