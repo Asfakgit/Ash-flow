@@ -1,6 +1,7 @@
 import axios from "axios";
 
-export const SHEETS_API_URL = import.meta.env.VITE_SHEETS_API_URL || "";
+export const SHEETS_API_URL =
+  (typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_SHEETS_API_URL : process.env.VITE_SHEETS_API_URL) || "";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -12,6 +13,88 @@ const normalizeResponseData = (data) => {
   }
   return data;
 };
+
+export const sendSheetPost = async (payload, timeoutMs = 15000) => {
+  if (!SHEETS_API_URL) {
+    throw new Error("No Google Sheets API URL configured");
+  }
+
+  const jsonString = JSON.stringify(payload);
+
+  if (typeof fetch === "function") {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+    try {
+      const response = await fetch(SHEETS_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain",
+        },
+        body: jsonString,
+        redirect: "follow",
+        signal: controller ? controller.signal : undefined,
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const rawText = await response.text();
+      const data = normalizeResponseData(rawText);
+
+      return {
+        status: response.status,
+        data,
+      };
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      throw err;
+    }
+  }
+
+  return axios.post(SHEETS_API_URL, jsonString, {
+    headers: { "Content-Type": "text/plain" },
+    transformResponse: (raw) => normalizeResponseData(raw),
+    timeout: timeoutMs,
+  });
+};
+
+export const sendSheetGet = async (url, timeoutMs = 15000) => {
+  if (!url) {
+    throw new Error("No URL provided");
+  }
+
+  if (typeof fetch === "function") {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        signal: controller ? controller.signal : undefined,
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const rawText = await response.text();
+      const data = normalizeResponseData(rawText);
+
+      return {
+        status: response.status,
+        data,
+      };
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      throw err;
+    }
+  }
+
+  return axios.get(url, {
+    transformResponse: (raw) => normalizeResponseData(raw),
+    timeout: timeoutMs,
+  });
+};
+
 
 // =======================
 // AUTH & SESSION MANAGEMENT
@@ -164,17 +247,7 @@ export const logoutUser = async () => {
 
   if (token) {
     try {
-      await axios
-        .post(
-          SHEETS_API_URL,
-          JSON.stringify({ action: "logout", token }),
-          {
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            transformResponse: (raw) => normalizeResponseData(raw),
-            timeout: 4000,
-          }
-        )
-        .catch(() => {});
+      await sendSheetPost({ action: "logout", token }, 4000).catch(() => {});
     } catch {
       // Non-blocking: local session is wiped regardless
     }
@@ -188,12 +261,7 @@ const postRequest = (payload) => {
     ...(token ? { token } : {}),
   };
 
-  return axios
-    .post(SHEETS_API_URL, JSON.stringify(dataToSend), {
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      transformResponse: (raw) => normalizeResponseData(raw),
-    })
-    .then((response) => {
+  return sendSheetPost(dataToSend).then((response) => {
       if (response.data?.success === false) {
         throw new Error(response.data.message || "Google Sheets request failed");
       }
@@ -609,18 +677,11 @@ export const loginUser = async (username, password) => {
   const rawPassword = String(password || "");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "login",
         username: trimmedUser,
         password: rawPassword,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
 
@@ -717,19 +778,12 @@ export const registerUser = async ({ username, password, fullName }) => {
   const trimmedName = String(fullName || "").trim();
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "register",
         username: trimmedUser,
         password: rawPassword,
         fullName: trimmedName,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -767,17 +821,10 @@ export const adminGetUsers = async () => {
   if (!token) throw new Error("Authentication token required");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_get_users",
         token: token,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -818,19 +865,12 @@ export const adminUpdateUserStatus = async (targetUsername, newStatus) => {
   if (!token) throw new Error("Authentication token required");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_update_user_status",
         token: token,
         targetUsername: targetUsername,
         newStatus: newStatus,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -855,19 +895,12 @@ export const adminDeleteUser = async (targetUsername) => {
   const cleanTarget = String(targetUsername || "").trim().toLowerCase();
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_delete_user",
         token: token,
         targetUsername: cleanTarget,
         id: 0,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -878,20 +911,13 @@ export const adminDeleteUser = async (targetUsername) => {
     }
 
     // Fallback: try admin_update_user_status with DELETED
-    const fallbackRes = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const fallbackRes = await sendSheetPost({
         action: "admin_update_user_status",
         token: token,
         targetUsername: cleanTarget,
         newStatus: "DELETED",
         id: 0,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     if (fallbackRes.data && fallbackRes.data.success) {
       return {
@@ -915,18 +941,11 @@ export const adminDeleteUser = async (targetUsername) => {
 export const requestPasswordReset = async (username, newPassword) => {
   const cleanUsername = String(username || "").trim().toLowerCase();
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "forgot_password",
         username: cleanUsername,
         newPassword: newPassword,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -944,18 +963,11 @@ export const adminApprovePasswordReset = async (targetUsername) => {
   if (!token) throw new Error("Authentication token required");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_approve_reset",
         token: token,
         targetUsername: String(targetUsername || "").trim().toLowerCase(),
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -973,19 +985,12 @@ export const adminSetUserPassword = async (targetUsername, newPassword) => {
   if (!token) throw new Error("Authentication token required");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_set_password",
         token: token,
         targetUsername: String(targetUsername || "").trim().toLowerCase(),
         newPassword: newPassword,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -1012,20 +1017,12 @@ export const updateAdminViewPermission = async (allowAdminView) => {
 
   // 2. Sync to cloud backend
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "update_admin_view_permission",
         token: token || "",
         username: curr?.username || "",
         allowAdminView: allowBool,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-        timeout: 9000,
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -1106,19 +1103,11 @@ export const updateUserProfileAvatar = async (avatarDataUrl) => {
   const token = getAuthToken();
   if (token) {
     try {
-      const res = await axios.post(
-        SHEETS_API_URL,
-        JSON.stringify({
+      const res = await sendSheetPost({
           action: "update_profile_avatar",
           token: token,
           avatar: avatarDataUrl || "",
-        }),
-        {
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          transformResponse: (raw) => normalizeResponseData(raw),
-          timeout: 8000,
-        }
-      );
+        });
       return res.data;
     } catch (err) {
       console.warn("Could not sync avatar to cloud backend (saved locally):", err);
@@ -1132,18 +1121,11 @@ export const adminGetUserTransactions = async (targetUsername) => {
   if (!token) throw new Error("Authentication token required");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_get_user_transactions",
         token: token,
         targetUsername: String(targetUsername || "").trim().toLowerCase(),
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -1247,9 +1229,7 @@ export const adminManagePremium = async ({
   const cleanAction = String(action || "").toUpperCase();
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_manage_premium",
         token: token,
         targetUsername: cleanUser,
@@ -1265,13 +1245,7 @@ export const adminManagePremium = async ({
         paymentMethod: paymentMethod || "",
         paymentReference: paymentReference || "",
         paymentStatus: paymentStatus || "PAID",
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-        timeout: 10000,
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success) {
@@ -1390,19 +1364,11 @@ export const adminGetPremiumAudits = async (targetUsername = null) => {
   const cleanTarget = targetUsername ? String(targetUsername).trim().toLowerCase() : null;
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "admin_get_premium_audits",
         token: token,
         targetUsername: cleanTarget,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-        timeout: 9000,
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success && Array.isArray(result.audits)) {
@@ -1432,18 +1398,10 @@ export const getUserSubscription = async () => {
   }
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "get_user_subscription",
         token: token,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-        timeout: 7000,
-      }
-    );
+      });
 
     const result = res.data;
     if (result && result.success === false) {
@@ -1540,18 +1498,10 @@ export const adminSetupSheets = async () => {
   if (!token) throw new Error("Authentication token required");
 
   try {
-    const res = await axios.post(
-      SHEETS_API_URL,
-      JSON.stringify({
+    const res = await sendSheetPost({
         action: "setup_sheets",
         token: token,
-      }),
-      {
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        transformResponse: (raw) => normalizeResponseData(raw),
-        timeout: 15000,
-      }
-    );
+      });
     return res.data;
   } catch (err) {
     console.error("adminSetupSheets error:", err);
@@ -1573,9 +1523,7 @@ export const getTransactions = async () => {
       ? `${SHEETS_API_URL}?token=${encodeURIComponent(token)}`
       : SHEETS_API_URL;
 
-    const { data } = await axios.get(url, {
-      transformResponse: (raw) => normalizeResponseData(raw),
-    });
+    const { data } = await sendSheetGet(url, 10000);
 
     if (!Array.isArray(data)) {
       if (data && data.success === false) {
