@@ -81,6 +81,57 @@ const PAYMENT_METHODS = [
   'Other',
 ];
 
+const toDateInputString = (dateInput) => {
+  if (!dateInput) return '';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addCalendarMonths = (dateStr, months = 1) => {
+  if (!dateStr) return '';
+  const parts = String(dateStr).split('T')[0].split('-');
+  if (parts.length < 3) return '';
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+
+  const target = new Date(year, month + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+
+  const y = target.getFullYear();
+  const m = String(target.getMonth() + 1).padStart(2, '0');
+  const d = String(target.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getPlanMonths = (planId) => {
+  if (planId === '1M') return 1;
+  if (planId === '6M') return 6;
+  if (planId === '1Y') return 12;
+  return 1;
+};
+
+const INITIAL_SUBSCRIPTION_STATE = {
+  open: false,
+  user: null,
+  selectedUsername: '',
+  action: 'ACTIVATE',
+  selectedPlanId: '1M',
+  planName: 'Monthly',
+  amountPaid: '',
+  paymentMethod: 'UPI (GPay)',
+  paymentReference: '',
+  paymentStatus: 'PAID',
+  activationDate: '',
+  expiryDate: '',
+  notes: '',
+};
+
 const Transition = forwardRef(function Transition(props, ref) {
   return (
     <Zoom
@@ -125,21 +176,8 @@ export default function AdminUserModal({
   });
 
   // Premium Subscription & Payment Dialog
-  const [subscriptionModal, setSubscriptionModal] = useState({
-    open: false,
-    user: null,
-    selectedUsername: '',
-    action: 'ACTIVATE', // 'ACTIVATE' | 'EXTEND'
-    selectedPlanId: '1Y',
-    planName: 'Yearly',
-    amountPaid: '',
-    paymentMethod: 'UPI (GPay)',
-    paymentReference: '',
-    paymentStatus: 'PAID',
-    activationDate: '',
-    expiryDate: '',
-    notes: '',
-  });
+  const [subscriptionError, setSubscriptionError] = useState('');
+  const [subscriptionModal, setSubscriptionModal] = useState(INITIAL_SUBSCRIPTION_STATE);
 
   // Premium Revoke Dialog
   const [revokeDialog, setRevokeDialog] = useState({
@@ -384,26 +422,27 @@ export default function AdminUserModal({
   // PREMIUM SUBSCRIPTION ACTIONS
   // ==========================================
   const openSubscriptionModal = (user = null, action = 'ACTIVATE') => {
-    const today = new Date().toISOString().split('T')[0];
-    let defaultActivation = today;
+    const today = toDateInputString(new Date());
+    const defaultActivation = today;
     let defaultExpiry = '';
 
-    if (action === 'EXTEND' && user?.premiumExpiresAt) {
-      const curExp = new Date(user.premiumExpiresAt).getTime();
-      const base = curExp > Date.now() ? curExp : Date.now();
-      defaultActivation = new Date(base).toISOString().split('T')[0];
-      defaultExpiry = new Date(base + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const curExp = user?.premiumExpiresAt ? new Date(user.premiumExpiresAt).getTime() : null;
+    const isFuture = curExp && !isNaN(curExp) && curExp > Date.now();
+
+    if (action === 'EXTEND' && isFuture) {
+      defaultExpiry = addCalendarMonths(toDateInputString(new Date(curExp)), 1);
     } else {
-      defaultExpiry = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      defaultExpiry = addCalendarMonths(today, 1);
     }
 
+    setSubscriptionError('');
     setSubscriptionModal({
       open: true,
       user,
       selectedUsername: user ? user.username : '',
       action,
-      selectedPlanId: '1Y',
-      planName: 'Yearly',
+      selectedPlanId: '1M',
+      planName: 'Monthly',
       amountPaid: '',
       paymentMethod: 'UPI (GPay)',
       paymentReference: '',
@@ -415,7 +454,6 @@ export default function AdminUserModal({
   };
 
   const handleSelectPlan = (plan) => {
-    let baseTime = Date.now();
     const targetUser =
       subscriptionModal.user ||
       users.find(
@@ -424,28 +462,67 @@ export default function AdminUserModal({
           String(subscriptionModal.selectedUsername || '').toLowerCase()
       );
 
-    if (subscriptionModal.action === 'EXTEND' && targetUser?.premiumExpiresAt) {
-      const curExp = new Date(targetUser.premiumExpiresAt).getTime();
-      if (!isNaN(curExp) && curExp > Date.now()) {
-        baseTime = curExp;
-      }
-    }
+    const curExp = targetUser?.premiumExpiresAt ? new Date(targetUser.premiumExpiresAt).getTime() : null;
+    const isFuture = subscriptionModal.action === 'EXTEND' && curExp && !isNaN(curExp) && curExp > Date.now();
 
-    if (plan.days > 0) {
-      const targetExpiry = new Date(baseTime + plan.days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      setSubscriptionModal((prev) => ({
-        ...prev,
-        selectedPlanId: plan.id,
-        planName: plan.label,
-        expiryDate: targetExpiry,
-      }));
-    } else {
-      setSubscriptionModal((prev) => ({
-        ...prev,
-        selectedPlanId: plan.id,
-        planName: plan.label,
-      }));
-    }
+    const baseDate = isFuture
+      ? toDateInputString(new Date(curExp))
+      : (subscriptionModal.activationDate || toDateInputString(new Date()));
+
+    const months = getPlanMonths(plan.id);
+    const targetExpiry = addCalendarMonths(baseDate, months);
+
+    setSubscriptionModal((prev) => ({
+      ...prev,
+      selectedPlanId: plan.id,
+      planName: plan.label,
+      expiryDate: targetExpiry,
+    }));
+  };
+
+  const handleActivationDateChange = (newActivationDate) => {
+    const targetUser =
+      subscriptionModal.user ||
+      users.find(
+        (u) =>
+          String(u.username || '').toLowerCase() ===
+          String(subscriptionModal.selectedUsername || '').toLowerCase()
+      );
+
+    const curExp = targetUser?.premiumExpiresAt ? new Date(targetUser.premiumExpiresAt).getTime() : null;
+    const isFuture = subscriptionModal.action === 'EXTEND' && curExp && !isNaN(curExp) && curExp > Date.now();
+
+    const baseDate = isFuture ? toDateInputString(new Date(curExp)) : newActivationDate;
+    const months = getPlanMonths(subscriptionModal.selectedPlanId || '1M');
+    const newExpiry = addCalendarMonths(baseDate, months);
+
+    setSubscriptionModal((prev) => ({
+      ...prev,
+      activationDate: newActivationDate,
+      expiryDate: newExpiry || prev.expiryDate,
+    }));
+  };
+
+  const handleSubscriberUserChange = (username) => {
+    const targetUser = users.find((u) => u.username === username);
+    const curExp = targetUser?.premiumExpiresAt ? new Date(targetUser.premiumExpiresAt).getTime() : null;
+    const isFuture = curExp && !isNaN(curExp) && curExp > Date.now();
+    const action = isFuture ? 'EXTEND' : 'ACTIVATE';
+    const today = toDateInputString(new Date());
+    const baseDate = isFuture ? toDateInputString(new Date(curExp)) : today;
+    const months = getPlanMonths(subscriptionModal.selectedPlanId || '1M');
+    const targetExpiry = addCalendarMonths(baseDate, months);
+
+    setSubscriptionError('');
+    setSubscriptionModal((prev) => ({
+      ...prev,
+      selectedUsername: username,
+      user: targetUser || null,
+      action,
+      activationDate: today,
+      expiryDate: targetExpiry,
+      notes: isFuture ? 'Subscription renewed & payment recorded' : 'Subscription payment recorded',
+    }));
   };
 
   const handleSaveSubscription = async () => {
@@ -458,30 +535,42 @@ export default function AdminUserModal({
       );
 
     if (!targetUser) {
-      setFeedback({ type: 'error', message: 'Please select a member for this subscription.' });
+      setSubscriptionError('Please select a member for this subscription.');
+      return;
+    }
+
+    if (!subscriptionModal.activationDate) {
+      setSubscriptionError('Please select an activation date.');
       return;
     }
 
     if (!subscriptionModal.expiryDate) {
-      setFeedback({ type: 'error', message: 'Please select an expiry date for this subscription.' });
+      setSubscriptionError('Please select an expiry date for this subscription.');
       return;
     }
+
     if (
-      subscriptionModal.activationDate &&
-      new Date(subscriptionModal.expiryDate).getTime() <= new Date(subscriptionModal.activationDate).getTime()
+      new Date(subscriptionModal.expiryDate).getTime() <=
+      new Date(subscriptionModal.activationDate).getTime()
     ) {
-      setFeedback({ type: 'error', message: 'Expiry date must be after the activation date.' });
+      setSubscriptionError('Expiry date must be after the activation date.');
+      return;
+    }
+
+    if (subscriptionModal.amountPaid !== '' && Number(subscriptionModal.amountPaid) < 0) {
+      setSubscriptionError('Amount paid cannot be negative.');
       return;
     }
 
     setActionLoading(true);
+    setSubscriptionError('');
     setFeedback({ type: '', message: '' });
     try {
       const res = await adminManagePremium({
         targetUsername: targetUser.username,
         action: subscriptionModal.action,
-        activationDate: new Date(subscriptionModal.activationDate).toISOString(),
-        expiryDate: new Date(subscriptionModal.expiryDate + 'T23:59:59.999Z').toISOString(),
+        activationDate: new Date(subscriptionModal.activationDate + 'T00:00:00').toISOString(),
+        expiryDate: new Date(subscriptionModal.expiryDate + 'T23:59:59.999').toISOString(),
         notes: subscriptionModal.notes,
         planName: subscriptionModal.planName,
         amountPaid: Number(subscriptionModal.amountPaid) || 0,
@@ -490,7 +579,7 @@ export default function AdminUserModal({
         paymentStatus: subscriptionModal.paymentStatus,
       });
 
-      if (res.success) {
+      if (res && res.success) {
         setFeedback({
           type: 'success',
           message:
@@ -525,28 +614,24 @@ export default function AdminUserModal({
           })
         );
 
-        setSubscriptionModal({
-          open: false,
-          user: null,
-          selectedUsername: '',
-          action: 'ACTIVATE',
-          selectedPlanId: '1Y',
-          planName: 'Yearly',
-          amountPaid: '',
-          paymentMethod: 'UPI (GPay)',
-          paymentReference: '',
-          paymentStatus: 'PAID',
-          activationDate: '',
-          expiryDate: '',
-          notes: '',
-        });
+        setSubscriptionError('');
+        setSubscriptionModal(INITIAL_SUBSCRIPTION_STATE);
         await loadUsers();
+      } else {
+        const errorMsg = res?.message || 'Failed to record subscription payment.';
+        setSubscriptionError(errorMsg);
+        setFeedback({
+          type: 'error',
+          message: errorMsg,
+        });
       }
     } catch (err) {
       console.error('Subscription error:', err);
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to record premium subscription.';
+      setSubscriptionError(errorMsg);
       setFeedback({
         type: 'error',
-        message: err.message || 'Failed to update premium subscription.',
+        message: errorMsg,
       });
     } finally {
       setActionLoading(false);
@@ -1756,24 +1841,12 @@ export default function AdminUserModal({
       {/* ========================================== */}
       <Dialog
         open={subscriptionModal.open}
-        onClose={() =>
-          !actionLoading &&
-          setSubscriptionModal({
-            open: false,
-            user: null,
-            selectedUsername: '',
-            action: 'ACTIVATE',
-            selectedPlanId: '1Y',
-            planName: 'Yearly',
-            amountPaid: '',
-            paymentMethod: 'UPI (GPay)',
-            paymentReference: '',
-            paymentStatus: 'PAID',
-            activationDate: '',
-            expiryDate: '',
-            notes: '',
-          })
-        }
+        onClose={() => {
+          if (!actionLoading) {
+            setSubscriptionError('');
+            setSubscriptionModal(INITIAL_SUBSCRIPTION_STATE);
+          }
+        }}
         maxWidth="sm"
         fullWidth
         PaperProps={{
@@ -1799,6 +1872,25 @@ export default function AdminUserModal({
         </DialogTitle>
 
         <DialogContent>
+          {subscriptionError && (
+            <Alert
+              severity="error"
+              variant="filled"
+              onClose={() => setSubscriptionError('')}
+              sx={{
+                mb: 2.5,
+                borderRadius: 2,
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)',
+              }}
+            >
+              {subscriptionError}
+            </Alert>
+          )}
+
           <Box mb={2.5}>
             {subscriptionModal.user ? (
               <Box
@@ -1841,14 +1933,7 @@ export default function AdminUserModal({
                   labelId="select-subscriber-label"
                   label="Select Subscriber Member"
                   value={subscriptionModal.selectedUsername}
-                  onChange={(e) => {
-                    const found = users.find((usr) => usr.username === e.target.value);
-                    setSubscriptionModal((prev) => ({
-                      ...prev,
-                      selectedUsername: e.target.value,
-                      user: found || null,
-                    }));
-                  }}
+                  onChange={(e) => handleSubscriberUserChange(e.target.value)}
                 >
                   {users
                     .filter((u) => u.status === 'APPROVED')
@@ -1987,7 +2072,7 @@ export default function AdminUserModal({
                 type="date"
                 label="Activation Date"
                 value={subscriptionModal.activationDate}
-                onChange={(e) => setSubscriptionModal((prev) => ({ ...prev, activationDate: e.target.value }))}
+                onChange={(e) => handleActivationDateChange(e.target.value)}
                 InputLabelProps={{ shrink: true }}
                 fullWidth
                 size="small"
@@ -2002,14 +2087,18 @@ export default function AdminUserModal({
                 InputLabelProps={{ shrink: true }}
                 fullWidth
                 size="small"
-                helperText="Automatic expiration date"
+                helperText={
+                  subscriptionModal.action === 'EXTEND' && subscriptionModal.user?.premiumExpiresAt
+                    ? 'Extended from current expiry date'
+                    : 'Automatic expiration date'
+                }
               />
             </Box>
 
             {/* Admin Billing Remarks / Notes */}
             <TextField
               label="Billing Remarks / Receipt Notes"
-              placeholder="e.g. Paid via GPay. Verified with bank statement. Annual VIP plan."
+              placeholder="e.g. Paid via GPay. Verified with bank statement. Monthly VIP plan."
               value={subscriptionModal.notes}
               onChange={(e) => setSubscriptionModal((prev) => ({ ...prev, notes: e.target.value }))}
               fullWidth
@@ -2023,23 +2112,10 @@ export default function AdminUserModal({
             <Button
               variant="outlined"
               disabled={actionLoading}
-              onClick={() =>
-                setSubscriptionModal({
-                  open: false,
-                  user: null,
-                  selectedUsername: '',
-                  action: 'ACTIVATE',
-                  selectedPlanId: '1Y',
-                  planName: 'Yearly',
-                  amountPaid: '',
-                  paymentMethod: 'UPI (GPay)',
-                  paymentReference: '',
-                  paymentStatus: 'PAID',
-                  activationDate: '',
-                  expiryDate: '',
-                  notes: '',
-                })
-              }
+              onClick={() => {
+                setSubscriptionError('');
+                setSubscriptionModal(INITIAL_SUBSCRIPTION_STATE);
+              }}
               sx={{ borderRadius: 1.5, textTransform: 'none' }}
             >
               Cancel
