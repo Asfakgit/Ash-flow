@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Container,
   Box,
@@ -76,8 +76,9 @@ function App() {
   });
 
   const [refresh, setRefresh] = useState(false);
+  const { transactions, setTransactions } = useTransactions(refresh);
   const [reportsOpen, setReportsOpen] = useState(false);
-  const [adminUsersOpen, setAdminUsersOpen] = useState(false);
+
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalDefaults, setAddModalDefaults] = useState({ person: "", type: "Lent" });
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
@@ -133,6 +134,22 @@ function App() {
     triggerRefresh();
   };
 
+  const performImmediateSignout = useCallback((notice) => {
+    logoutUser();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setTransactions([]);
+    setPendingUsersCount(0);
+    setReportsOpen(false);
+    if (notice) {
+      try {
+        sessionStorage.setItem("ashflow_logout_notice", notice);
+      } catch {
+        // Ignore
+      }
+    }
+  }, [setTransactions]);
+
   const handleLogout = () => {
     showNotification({
       type: "confirm",
@@ -147,7 +164,6 @@ function App() {
         setTransactions([]);
         setPendingUsersCount(0);
         setReportsOpen(false);
-        setAdminUsersOpen(false);
       },
     });
   };
@@ -164,6 +180,92 @@ function App() {
       window.removeEventListener("storage", handleUserUpdate);
     };
   }, []);
+
+  // Listen for forced logouts (sudden signout upon premium activation/revocation) and run fast session heartbeat
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) return;
+
+    const myUsername = String(currentUser.username || "").toLowerCase().trim();
+
+    // 1. BroadcastChannel across all browser tabs
+    let authChannel;
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        authChannel = new BroadcastChannel("ashflow_auth_channel");
+        authChannel.onmessage = (event) => {
+          if (event.data?.type === "FORCE_LOGOUT") {
+            const target = String(event.data.username || "").toLowerCase().trim();
+            if (target === myUsername || target === "all") {
+              performImmediateSignout(event.data.reason);
+            }
+          }
+        };
+      }
+    } catch (e) {
+      console.warn("BroadcastChannel error:", e);
+    }
+
+    // 2. Storage event for cross-tab sync
+    const handleStorage = (e) => {
+      if (e.key === "ashflow_force_logout" && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          const target = String(data.username || "").toLowerCase().trim();
+          if (target === myUsername || target === "all") {
+            performImmediateSignout(data.reason);
+          }
+        } catch (err) {
+          console.warn("Storage sync parse error:", err);
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    // 3. Local custom event
+    const handleLocalForceLogout = (e) => {
+      const target = String(e.detail?.username || "").toLowerCase().trim();
+      if (target === myUsername || target === "all") {
+        performImmediateSignout(e.detail?.reason);
+      }
+    };
+    window.addEventListener("auth_force_logout", handleLocalForceLogout);
+
+    // 4. Session & membership heartbeat (every 8s and on tab focus)
+    const checkSessionState = () => {
+      if (!isUserAuthenticated()) {
+        performImmediateSignout();
+        return;
+      }
+      getUserSubscription()
+        .then((res) => {
+          if (res && res.error === "UNAUTHORIZED") {
+            performImmediateSignout(
+              res.message || "Your session has ended due to a membership update. Please sign in again."
+            );
+          } else if (res && res.subscription) {
+            const u = getAuthUser();
+            if (u) setCurrentUser(u);
+          }
+        })
+        .catch(() => {});
+    };
+
+    const heartbeatTimer = setInterval(checkSessionState, 8000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") checkSessionState();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", checkSessionState);
+
+    return () => {
+      if (authChannel) authChannel.close();
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("auth_force_logout", handleLocalForceLogout);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", checkSessionState);
+      clearInterval(heartbeatTimer);
+    };
+  }, [isAuthenticated, currentUser, performImmediateSignout]);
 
   // Backend verification of subscription validity on session start & refresh
   useEffect(() => {
@@ -194,10 +296,6 @@ function App() {
   }, [isAuthenticated, currentUser, refresh]);
 
   const theme = useTheme();
-
-
-
-  const { transactions, setTransactions } = useTransactions(refresh);
 
   // Track the current date string so the app re-renders when the day changes
   const [todayStr, setTodayStr] = useState(new Date().toDateString());
@@ -262,7 +360,7 @@ function App() {
           onOpenReports={() => setReportsOpen(true)}
           currentUser={currentUser}
           pendingUsersCount={pendingUsersCount}
-          onOpenAdminUsers={() => setAdminUsersOpen(true)}
+          onOpenAdminUsers={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           onLogout={handleLogout}
         />
 
@@ -270,75 +368,88 @@ function App() {
           maxWidth="lg"
           sx={{ mt: { xs: 1.5, md: 3 }, px: { xs: 1.5, sm: 3 } }}
         >
-          <Fade in timeout={600}>
-            <Box mb={{ xs: 3, md: 5 }} textAlign="center">
-              <Typography
-                variant="h3"
-                fontWeight="800"
-                sx={{
-                  fontSize: { xs: "1.6rem", sm: "2.25rem", md: "2.75rem" },
-                  background: theme.palette.custom.titleGradient,
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  mb: 0.5,
-                  letterSpacing: "-0.03em",
-                }}
-              >
-                Financial Overview
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{
-                  color: theme.palette.text.secondary,
-                  maxWidth: 580,
-                  mx: "auto",
-                  fontSize: { xs: "0.85rem", sm: "1rem" },
-                  px: 1,
-                }}
-              >
-                {dailyQuote}
-              </Typography>
-            </Box>
-          </Fade>
-
-          {/* Person Balances - Primary Focus with "+ Add Transaction" Button */}
-          <Box mb={{ xs: 3, md: 4.5 }}>
-            <PersonBalance
-              transactions={transactions}
-              setTransactions={setTransactions}
-              triggerRefresh={triggerRefresh}
-              showNotification={showNotification}
-              onOpenAdd={(defaults) => {
-                const isEvent = Boolean(
-                  defaults &&
-                    (defaults.nativeEvent ||
-                      defaults.target ||
-                      typeof defaults.preventDefault === "function" ||
-                      defaults.type === "click")
-                );
-                const safeDefaults =
-                  isEvent || !defaults || typeof defaults !== "object"
-                    ? { person: "", type: "Lent" }
-                    : {
-                        person: defaults.person || "",
-                        type: ["Lent", "Borrowed", "Partial Payment"].includes(defaults.type)
-                          ? defaults.type
-                          : "Lent",
-                      };
-                setAddModalDefaults(safeDefaults);
-                setAddModalOpen(true);
+          {currentUser?.role === "ADMIN" ? (
+            <AdminUserModal
+              inline={true}
+              currentUser={currentUser}
+              onUsersUpdated={(users) => {
+                const pending = users.filter((u) => u.status === "PENDING").length;
+                setPendingUsersCount(pending);
               }}
             />
-          </Box>
+          ) : (
+            <>
+              <Fade in timeout={600}>
+                <Box mb={{ xs: 3, md: 5 }} textAlign="center">
+                  <Typography
+                    variant="h3"
+                    fontWeight="800"
+                    sx={{
+                      fontSize: { xs: "1.6rem", sm: "2.25rem", md: "2.75rem" },
+                      background: theme.palette.custom.titleGradient,
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      mb: 0.5,
+                      letterSpacing: "-0.03em",
+                    }}
+                  >
+                    Financial Overview
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      maxWidth: 580,
+                      mx: "auto",
+                      fontSize: { xs: "0.85rem", sm: "1rem" },
+                      px: 1,
+                    }}
+                  >
+                    {dailyQuote}
+                  </Typography>
+                </Box>
+              </Fade>
 
-          <Box>
-            <Transactions
-              transactions={transactions}
-              setTransactions={setTransactions}
-              triggerRefresh={triggerRefresh}
-              showNotification={showNotification}
-            />
-          </Box>
+              {/* Person Balances - Primary Focus with "+ Add Transaction" Button */}
+              <Box mb={{ xs: 3, md: 4.5 }}>
+                <PersonBalance
+                  transactions={transactions}
+                  setTransactions={setTransactions}
+                  triggerRefresh={triggerRefresh}
+                  showNotification={showNotification}
+                  onOpenAdd={(defaults) => {
+                    const isEvent = Boolean(
+                      defaults &&
+                        (defaults.nativeEvent ||
+                          defaults.target ||
+                          typeof defaults.preventDefault === "function" ||
+                          defaults.type === "click")
+                    );
+                    const safeDefaults =
+                      isEvent || !defaults || typeof defaults !== "object"
+                        ? { person: "", type: "Lent" }
+                        : {
+                            person: defaults.person || "",
+                            type: ["Lent", "Borrowed", "Partial Payment"].includes(defaults.type)
+                              ? defaults.type
+                              : "Lent",
+                          };
+                    setAddModalDefaults(safeDefaults);
+                    setAddModalOpen(true);
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Transactions
+                  transactions={transactions}
+                  setTransactions={setTransactions}
+                  triggerRefresh={triggerRefresh}
+                  showNotification={showNotification}
+                />
+              </Box>
+            </>
+          )}
         </Container>
 
         {/* Centralized Custom Notification Dialog */}
@@ -369,20 +480,8 @@ function App() {
           open={reportsOpen}
           onClose={() => setReportsOpen(false)}
           transactions={transactions}
+          currentUser={currentUser}
         />
-
-        {/* Admin User Management & Approvals Modal */}
-        {currentUser?.role === "ADMIN" && (
-          <AdminUserModal
-            open={adminUsersOpen}
-            onClose={() => setAdminUsersOpen(false)}
-            currentUser={currentUser}
-            onUsersUpdated={(users) => {
-              const pending = users.filter((u) => u.status === "PENDING").length;
-              setPendingUsersCount(pending);
-            }}
-          />
-        )}
       </Box>
     </>
   );

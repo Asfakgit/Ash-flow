@@ -33,6 +33,10 @@ const USERS_HEADERS = [
   "premium_expires_at",
   "premium_granted_by",
   "premium_updated_at",
+  "premium_plan",
+  "premium_amount_paid",
+  "premium_payment_method",
+  "premium_payment_ref",
 ];
 const PREMIUM_AUDIT_SHEET_NAME = "Premium_Audits";
 const PREMIUM_AUDIT_HEADERS = [
@@ -48,6 +52,11 @@ const PREMIUM_AUDIT_HEADERS = [
   "admin_username",
   "timestamp",
   "notes",
+  "plan_name",
+  "amount_paid",
+  "payment_method",
+  "payment_reference",
+  "payment_status",
 ];
 
 function doGet(e) {
@@ -803,6 +812,10 @@ function handleAdminGetUsers_(data) {
       premiumExpiresAt: expAt,
       premiumGrantedBy: grantedBy,
       premiumUpdatedAt: updatedSubAt,
+      premiumPlan: r[19] || "",
+      premiumAmountPaid: Number(r[20]) || 0,
+      premiumPaymentMethod: r[21] || "",
+      premiumPaymentRef: r[22] || "",
     });
   }
 
@@ -1253,6 +1266,11 @@ function logPremiumAudit_(data) {
       String(data.adminUsername || ""),
       String(data.timestamp || new Date().toISOString()),
       String(data.notes || ""),
+      String(data.planName || ""),
+      Number(data.amountPaid || 0),
+      String(data.paymentMethod || ""),
+      String(data.paymentReference || ""),
+      String(data.paymentStatus || "PAID"),
     ]);
     return auditId;
   } catch (err) {
@@ -1323,6 +1341,11 @@ function handleAdminManagePremium_(data) {
   let expiryDate = targetUser.premiumExpiresAt || "";
   const nowIso = new Date().toISOString();
   const notes = String(data.notes || "").trim();
+  const planName = String(data.planName || data.plan || "").trim();
+  const amountPaid = Number(data.amountPaid || data.amount || 0);
+  const paymentMethod = String(data.paymentMethod || data.method || "").trim();
+  const paymentRef = String(data.paymentReference || data.paymentRef || data.ref || "").trim();
+  const paymentStatus = String(data.paymentStatus || "PAID").trim().toUpperCase();
 
   if (action === "ACTIVATE") {
     newStatus = "PREMIUM";
@@ -1330,11 +1353,15 @@ function handleAdminManagePremium_(data) {
     if (data.expiryDate) {
       expiryDate = new Date(data.expiryDate).toISOString();
     } else {
-      expiryDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     }
   } else if (action === "EXTEND") {
     newStatus = "PREMIUM";
-    if (!activationDate) activationDate = nowIso;
+    if (data.activationDate) {
+      activationDate = new Date(data.activationDate).toISOString();
+    } else if (!activationDate) {
+      activationDate = nowIso;
+    }
     if (!data.expiryDate) {
       return json_({ success: false, message: "Expiry date is required to extend subscription." });
     }
@@ -1360,6 +1387,13 @@ function handleAdminManagePremium_(data) {
   sheet.getRange(targetUser.rowIndex, 17).setValue(expiryDate);
   sheet.getRange(targetUser.rowIndex, 18).setValue(adminUser.username);
   sheet.getRange(targetUser.rowIndex, 19).setValue(nowIso);
+  sheet.getRange(targetUser.rowIndex, 20).setValue(planName);
+  sheet.getRange(targetUser.rowIndex, 21).setValue(amountPaid);
+  sheet.getRange(targetUser.rowIndex, 22).setValue(paymentMethod);
+  sheet.getRange(targetUser.rowIndex, 23).setValue(paymentRef);
+
+  // Invalidate current session token so target user is immediately signed out
+  sheet.getRange(targetUser.rowIndex, 9).setValue("");
 
   // Log complete audit history
   logPremiumAudit_({
@@ -1373,6 +1407,11 @@ function handleAdminManagePremium_(data) {
     adminId: adminUser.id,
     adminUsername: adminUser.username,
     notes: notes || (action + " by Admin @" + adminUser.username),
+    planName: planName,
+    amountPaid: amountPaid,
+    paymentMethod: paymentMethod,
+    paymentReference: paymentRef,
+    paymentStatus: paymentStatus,
   });
 
   const isPremiumActive = newStatus === "PREMIUM" && (!expiryDate || new Date(expiryDate).getTime() > Date.now());
@@ -1387,6 +1426,11 @@ function handleAdminManagePremium_(data) {
       expiresAt: expiryDate,
       grantedBy: adminUser.username,
       updatedAt: nowIso,
+      planName: planName,
+      amountPaid: amountPaid,
+      paymentMethod: paymentMethod,
+      paymentReference: paymentRef,
+      paymentStatus: paymentStatus,
     },
   });
 }
@@ -1422,6 +1466,11 @@ function handleAdminGetPremiumAudits_(data) {
       adminUsername: row[9],
       timestamp: row[10],
       notes: row[11],
+      planName: row[12] || "",
+      amountPaid: Number(row[13]) || 0,
+      paymentMethod: row[14] || "",
+      paymentReference: row[15] || "",
+      paymentStatus: row[16] || "PAID",
     });
   }
 

@@ -1,8 +1,6 @@
 import axios from "axios";
 
-export const SHEETS_API_URL =
-  import.meta.env.VITE_SHEETS_API_URL ||
-  "https://script.google.com/macros/s/AKfycbz5y19U14T-4sPdnstg5gHT7jh-lgDloq-RBpyj2p9bUEiRTRSdBgV1nG2K4vx1NaC6/exec";
+export const SHEETS_API_URL = import.meta.env.VITE_SHEETS_API_URL || "";
 
 const normalizeResponseData = (data) => {
   if (typeof data === "string") {
@@ -99,6 +97,64 @@ export const clearAuthSession = () => {
     sessionStorage.clear();
   } catch (err) {
     console.error("Failed to clear auth session:", err);
+  }
+};
+
+export const broadcastForceLogout = (username, reason = "MEMBERSHIP_UPDATE") => {
+  if (!username) return;
+  const cleanTarget = String(username).toLowerCase().trim();
+
+  // 1. BroadcastChannel across all active tabs
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel("ashflow_auth_channel");
+      channel.postMessage({
+        type: "FORCE_LOGOUT",
+        username: cleanTarget,
+        reason,
+        timestamp: Date.now(),
+      });
+      channel.close();
+    }
+  } catch (err) {
+    console.warn("BroadcastChannel error:", err);
+  }
+
+  // 2. Storage event across tabs
+  try {
+    localStorage.setItem(
+      "ashflow_force_logout",
+      JSON.stringify({
+        username: cleanTarget,
+        reason,
+        timestamp: Date.now(),
+      })
+    );
+  } catch (err) {
+    console.warn("Storage sync error:", err);
+  }
+
+  // 3. Dispatch locally in this window
+  try {
+    window.dispatchEvent(
+      new CustomEvent("auth_force_logout", {
+        detail: { username: cleanTarget, reason },
+      })
+    );
+  } catch (err) {
+    console.warn("CustomEvent error:", err);
+  }
+
+  // 4. If current session in this window matches target username, execute immediate signout
+  const curr = getAuthUser();
+  if (curr && String(curr.username || "").toLowerCase().trim() === cleanTarget) {
+    clearAuthSession();
+    try {
+      sessionStorage.setItem("ashflow_logout_notice", reason);
+    } catch {
+      // Ignore
+    }
+    window.location.reload();
   }
 };
 
@@ -739,6 +795,10 @@ export const adminGetUsers = async () => {
             premiumExpiresAt: local.expiresAt || u.premiumExpiresAt,
             premiumGrantedBy: local.grantedBy || u.premiumGrantedBy,
             premiumUpdatedAt: local.updatedAt || u.premiumUpdatedAt,
+            premiumPlan: local.planName || u.premiumPlan || "",
+            premiumAmountPaid: local.amountPaid !== undefined ? local.amountPaid : (u.premiumAmountPaid || 0),
+            premiumPaymentMethod: local.paymentMethod || u.premiumPaymentMethod || "",
+            premiumPaymentRef: local.paymentReference || u.premiumPaymentRef || "",
           };
         }
         return u;
@@ -1174,6 +1234,11 @@ export const adminManagePremium = async ({
   activationDate,
   expiryDate,
   notes,
+  planName = '',
+  amountPaid = 0,
+  paymentMethod = '',
+  paymentReference = '',
+  paymentStatus = 'PAID',
 }) => {
   const token = getAuthToken();
   if (!token) throw new Error("Authentication token required");
@@ -1195,6 +1260,11 @@ export const adminManagePremium = async ({
         activationDate: activationDate || new Date().toISOString(),
         expiryDate: expiryDate || "",
         notes: notes || "",
+        planName: planName || "",
+        amountPaid: Number(amountPaid || 0),
+        paymentMethod: paymentMethod || "",
+        paymentReference: paymentReference || "",
+        paymentStatus: paymentStatus || "PAID",
       }),
       {
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -1213,6 +1283,11 @@ export const adminManagePremium = async ({
         expiresAt: expiryDate || "",
         grantedBy: currAdmin?.username || "admin",
         updatedAt: new Date().toISOString(),
+        planName: planName || "",
+        amountPaid: Number(amountPaid || 0),
+        paymentMethod: paymentMethod || "",
+        paymentReference: paymentReference || "",
+        paymentStatus: paymentStatus || "PAID",
       };
       saveLocalSubscription(cleanUser, sub);
 
@@ -1229,69 +1304,81 @@ export const adminManagePremium = async ({
         adminUsername: currAdmin?.username || "admin",
         timestamp: new Date().toISOString(),
         notes: notes || "",
+        planName: planName || "",
+        amountPaid: Number(amountPaid || 0),
+        paymentMethod: paymentMethod || "",
+        paymentReference: paymentReference || "",
+        paymentStatus: paymentStatus || "PAID",
       });
 
-      // If updating currently logged in user, refresh session
-      if (currAdmin && currAdmin.username.toLowerCase() === cleanUser) {
-        currAdmin.subscription = sub;
-        currAdmin.membershipStatus = sub.membershipStatus;
-        currAdmin.premiumExpiresAt = sub.expiresAt;
-        setAuthUser(currAdmin);
-        window.dispatchEvent(new Event("auth_user_updated"));
-      }
+      // Invalidate active session and suddenly sign out target user
+      broadcastForceLogout(
+        cleanUser,
+        `Your membership status was updated to ${sub.membershipStatus} by an Administrator. Please log in again.`
+      );
 
       return result;
     }
 
     throw new Error(result?.message || `Failed to ${cleanAction.toLowerCase()} premium subscription.`);
   } catch (err) {
-    const currAdmin = getAuthUser();
-    if (currAdmin?.role === "ADMIN") {
-      const nowIso = new Date().toISOString();
-      const newStatus = cleanAction === "REVOKE" || cleanAction === "DEACTIVATE" ? "REVOKED" : "PREMIUM";
-      const isAct = newStatus === "PREMIUM" && (!expiryDate || new Date(expiryDate).getTime() > Date.now());
-
-      const sub = {
-        membershipStatus: newStatus,
-        isPremiumActive: isAct,
-        activatedAt: activationDate || nowIso,
-        expiresAt: expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        grantedBy: currAdmin.username,
-        updatedAt: nowIso,
-      };
-
-      saveLocalSubscription(cleanUser, sub);
-
-      saveLocalPremiumAudit({
-        auditId: "local_audit_" + Date.now(),
-        userId: cleanUser,
-        username: cleanUser,
-        action: cleanAction,
-        previousStatus: "STANDARD",
-        newStatus: newStatus,
-        activationDate: sub.activatedAt,
-        expiryDate: sub.expiresAt,
-        adminId: currAdmin.id,
-        adminUsername: currAdmin.username,
-        timestamp: nowIso,
-        notes: notes || `Offline ${cleanAction} by admin`,
-      });
-
-      if (currAdmin.username.toLowerCase() === cleanUser) {
-        currAdmin.subscription = sub;
-        currAdmin.membershipStatus = newStatus;
-        currAdmin.premiumExpiresAt = sub.expiresAt;
-        setAuthUser(currAdmin);
-        window.dispatchEvent(new Event("auth_user_updated"));
-      }
-
-      return {
-        success: true,
-        message: `Premium subscription ${cleanAction.toLowerCase()}d successfully.`,
-        subscription: sub,
-      };
-    }
     console.error("adminManagePremium error:", err);
+    if (!SHEETS_API_URL) {
+      const currAdmin = getAuthUser();
+      if (currAdmin?.role === "ADMIN") {
+        const nowIso = new Date().toISOString();
+        const newStatus = cleanAction === "REVOKE" || cleanAction === "DEACTIVATE" ? "REVOKED" : "PREMIUM";
+        const isAct = newStatus === "PREMIUM" && (!expiryDate || new Date(expiryDate).getTime() > Date.now());
+
+        const sub = {
+          membershipStatus: newStatus,
+          isPremiumActive: isAct,
+          activatedAt: activationDate || nowIso,
+          expiresAt: expiryDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          grantedBy: currAdmin.username,
+          updatedAt: nowIso,
+          planName: planName || "",
+          amountPaid: Number(amountPaid || 0),
+          paymentMethod: paymentMethod || "",
+          paymentReference: paymentReference || "",
+          paymentStatus: paymentStatus || "PAID",
+        };
+
+        saveLocalSubscription(cleanUser, sub);
+
+        saveLocalPremiumAudit({
+          auditId: "local_audit_" + Date.now(),
+          userId: cleanUser,
+          username: cleanUser,
+          action: cleanAction,
+          previousStatus: "STANDARD",
+          newStatus: newStatus,
+          activationDate: sub.activatedAt,
+          expiryDate: sub.expiresAt,
+          adminId: currAdmin.id,
+          adminUsername: currAdmin.username,
+          timestamp: nowIso,
+          notes: notes || `Offline ${cleanAction} by admin`,
+          planName: planName || "",
+          amountPaid: Number(amountPaid || 0),
+          paymentMethod: paymentMethod || "",
+          paymentReference: paymentReference || "",
+          paymentStatus: paymentStatus || "PAID",
+        });
+
+        // Invalidate active session and suddenly sign out target user
+        broadcastForceLogout(
+          cleanUser,
+          `Your membership status was updated to ${newStatus} by an Administrator. Please log in again.`
+        );
+
+        return {
+          success: true,
+          message: `Premium subscription ${cleanAction.toLowerCase()}d successfully (offline).`,
+          subscription: sub,
+        };
+      }
+    }
     throw err;
   }
 };
@@ -1359,6 +1446,26 @@ export const getUserSubscription = async () => {
     );
 
     const result = res.data;
+    if (result && result.success === false) {
+      if (
+        result.error === "UNAUTHORIZED" ||
+        result.error === "FORBIDDEN" ||
+        String(result.message || "").toLowerCase().includes("session")
+      ) {
+        clearAuthSession();
+        broadcastForceLogout(
+          currUser.username,
+          "Your session has ended due to a membership update. Please sign in again."
+        );
+        return {
+          success: false,
+          isPremiumActive: false,
+          error: "UNAUTHORIZED",
+          message: result.message || "Invalid or expired session.",
+        };
+      }
+    }
+
     if (result && result.success && result.subscription) {
       const localSubs = getLocalSubscriptions();
       const local = localSubs[String(currUser.username || "").toLowerCase()];

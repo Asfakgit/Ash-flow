@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -45,6 +45,19 @@ const Login = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
+
+  // Check for forced logout notices (e.g. membership change)
+  useEffect(() => {
+    try {
+      const notice = sessionStorage.getItem('ashflow_logout_notice');
+      if (notice) {
+        setInfoMessage(notice);
+        sessionStorage.removeItem('ashflow_logout_notice');
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
 
   // Forgot Password Dialog States
   const [forgotOpen, setForgotOpen] = useState(false);

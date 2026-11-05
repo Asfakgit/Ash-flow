@@ -1,4 +1,4 @@
-import { useState, useMemo, forwardRef, useEffect } from "react";
+import { useState, useMemo, forwardRef, useEffect, useCallback } from "react";
 import { useTheme } from "@mui/material/styles";
 import {
   Dialog,
@@ -17,6 +17,13 @@ import {
   LinearProgress,
   Snackbar,
   Alert,
+  TextField,
+  InputAdornment,
+  CircularProgress,
+  Tabs,
+  Tab,
+  Button,
+  Avatar,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AssessmentIcon from "@mui/icons-material/Assessment";
@@ -34,8 +41,17 @@ import CheckIcon from "@mui/icons-material/Check";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ShieldIcon from "@mui/icons-material/Shield";
 import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SearchIcon from "@mui/icons-material/Search";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
+import BlockIcon from "@mui/icons-material/Block";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import soundEffects from "../Services/soundEffects";
-import { getDataRows, getRowVal } from "../Services/SheetService";
+import { getDataRows, getRowVal, adminGetUsers, adminGetPremiumAudits } from "../Services/SheetService";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -68,11 +84,219 @@ const MONTH_NAMES = [
   "Dec",
 ];
 
-function ReportsModal({ open, onClose, transactions = [] }) {
+function ReportsModal({ open, onClose, transactions = [], currentUser }) {
   const theme = useTheme();
   const [hoveredData, setHoveredData] = useState(null);
   const [timeRange, setTimeRange] = useState("6m"); // '3m', '6m', 'year', 'all'
   const [copiedToast, setCopiedToast] = useState(false);
+
+  // Admin Users & Subscription Report State
+  const isAdmin = currentUser?.role === "ADMIN";
+  const [adminReportTab, setAdminReportTab] = useState("OVERVIEW"); // 'OVERVIEW' | 'DIRECTORY' | 'LEDGER'
+  const [usersList, setUsersList] = useState([]);
+  const [auditList, setAuditList] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userFilterTab, setUserFilterTab] = useState("ALL"); // 'ALL' | 'APPROVED' | 'PENDING' | 'PREMIUM' | 'STANDARD' | 'INACTIVE'
+  const [copiedText, setCopiedText] = useState("Portfolio digest copied to clipboard!");
+
+  const fetchAdminData = useCallback(async () => {
+    setAdminLoading(true);
+    try {
+      const [usersRes, auditsRes] = await Promise.allSettled([
+        adminGetUsers(),
+        adminGetPremiumAudits(),
+      ]);
+
+      if (usersRes.status === "fulfilled" && usersRes.value?.success) {
+        setUsersList(usersRes.value.users || []);
+      }
+      if (auditsRes.status === "fulfilled" && auditsRes.value?.success) {
+        setAuditList(auditsRes.value.audits || []);
+      }
+    } catch (err) {
+      console.warn("Failed to load user report data:", err);
+    } finally {
+      setAdminLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && isAdmin) {
+      fetchAdminData();
+    }
+  }, [open, isAdmin, fetchAdminData]);
+
+  // Aggregate user statistics
+  const userStats = useMemo(() => {
+    const total = usersList.length;
+    const pending = usersList.filter((u) => u.status === "PENDING").length;
+    const approved = usersList.filter((u) => u.status === "APPROVED").length;
+    const inactive = usersList.filter(
+      (u) => u.status === "DISABLED" || u.status === "REJECTED"
+    ).length;
+
+    let activePremium = 0;
+    let standard = 0;
+    let expired = 0;
+    let revoked = 0;
+    let expiringSoon = 0;
+    let totalRevenue = 0;
+    const plansCount = {};
+    const methodsCount = {};
+    const tabsBound = usersList.filter((u) => u.sheetTab && u.sheetTab !== "None").length;
+
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+
+    usersList.forEach((u) => {
+      const expTime = u.premiumExpiresAt ? new Date(u.premiumExpiresAt).getTime() : null;
+      const isAct = Boolean(
+        u.isPremiumActive ||
+          (u.membershipStatus === "PREMIUM" && (!expTime || expTime > now))
+      );
+
+      if (isAct) {
+        activePremium++;
+        if (expTime && expTime - now < thirtyDays) {
+          expiringSoon++;
+        }
+      } else if (u.membershipStatus === "EXPIRED" || (expTime && expTime <= now)) {
+        expired++;
+      } else if (u.membershipStatus === "REVOKED") {
+        revoked++;
+      } else {
+        standard++;
+      }
+
+      const amt = parseFloat(u.premiumAmountPaid) || 0;
+      if (amt > 0) {
+        totalRevenue += amt;
+      }
+
+      const planName = u.premiumPlan || (isAct ? "Premium Pass" : "Standard Free");
+      plansCount[planName] = (plansCount[planName] || 0) + 1;
+
+      if (u.premiumPaymentMethod) {
+        methodsCount[u.premiumPaymentMethod] =
+          (methodsCount[u.premiumPaymentMethod] || 0) + 1;
+      }
+    });
+
+    let auditRevenue = 0;
+    auditList.forEach((a) => {
+      const amt = parseFloat(a.amountPaid) || 0;
+      if (amt > 0 && String(a.paymentStatus || "PAID").toUpperCase() === "PAID") {
+        auditRevenue += amt;
+      }
+    });
+
+    const finalRevenue = Math.max(totalRevenue, auditRevenue);
+    const avgRevenue = activePremium > 0 ? Math.round(finalRevenue / activePremium) : 0;
+    const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 100;
+    const premiumConversionRate = total > 0 ? Math.round((activePremium / total) * 100) : 0;
+
+    return {
+      total,
+      pending,
+      approved,
+      inactive,
+      activePremium,
+      standard,
+      expired,
+      revoked,
+      expiringSoon,
+      totalRevenue: finalRevenue,
+      avgRevenue,
+      approvalRate,
+      premiumConversionRate,
+      tabsBound,
+      plansCount,
+      methodsCount,
+    };
+  }, [usersList, auditList]);
+
+  // Filtered users for directory tab
+  const filteredUsersList = useMemo(() => {
+    let list = [...usersList];
+
+    if (userFilterTab === "APPROVED") {
+      list = list.filter((u) => u.status === "APPROVED");
+    } else if (userFilterTab === "PENDING") {
+      list = list.filter((u) => u.status === "PENDING");
+    } else if (userFilterTab === "PREMIUM") {
+      list = list.filter((u) => u.isPremiumActive);
+    } else if (userFilterTab === "STANDARD") {
+      list = list.filter((u) => !u.isPremiumActive && u.status === "APPROVED");
+    } else if (userFilterTab === "INACTIVE") {
+      list = list.filter((u) => u.status === "DISABLED" || u.status === "REJECTED");
+    }
+
+    if (userSearchQuery.trim()) {
+      const q = userSearchQuery.toLowerCase().trim();
+      list = list.filter((u) => {
+        return (
+          String(u.username || "").toLowerCase().includes(q) ||
+          String(u.fullName || "").toLowerCase().includes(q) ||
+          String(u.sheetTab || "").toLowerCase().includes(q) ||
+          String(u.premiumPlan || "").toLowerCase().includes(q) ||
+          String(u.premiumPaymentMethod || "").toLowerCase().includes(q) ||
+          String(u.premiumPaymentRef || "").toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return list;
+  }, [usersList, userFilterTab, userSearchQuery]);
+
+  // Handle Copy / Share Executive User Digest
+  const handleCopyUserReport = () => {
+    try {
+      soundEffects.playAdd();
+    } catch {
+      // ignore
+    }
+    const dateStr = new Date().toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const reportLines = [
+      `👥 Ash Flow • Users & Subscription Report (${dateStr})`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `📊 Total Registered Members: ${userStats.total}`,
+      `   • Approved: ${userStats.approved} (${userStats.approvalRate}%)`,
+      `   • Pending Approval: ${userStats.pending}`,
+      `   • Inactive/Disabled: ${userStats.inactive}`,
+      `   • Google Sheets Tabs Bound: ${userStats.tabsBound}`,
+      ``,
+      `👑 Premium Memberships & Revenue:`,
+      `   • Active Premium Users: ${userStats.activePremium} (${userStats.premiumConversionRate}%)`,
+      `   • Total Subscription Revenue: ₹${userStats.totalRevenue.toLocaleString("en-IN")}`,
+      `   • Average Revenue Per Active User: ₹${userStats.avgRevenue.toLocaleString("en-IN")}`,
+      `   • Expiring in < 30 Days: ${userStats.expiringSoon}`,
+      `   • Expired / Revoked: ${userStats.expired + userStats.revoked}`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `Generated by Ash Flow Administration Intelligence`,
+    ].join("\n");
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(reportLines)
+        .then(() => {
+          setCopiedText("User & Subscription Report copied to clipboard!");
+          setCopiedToast(true);
+        })
+        .catch(() => {
+          setCopiedText("User & Subscription Report copied to clipboard!");
+          setCopiedToast(true);
+        });
+    } else {
+      setCopiedText("User & Subscription Report copied to clipboard!");
+      setCopiedToast(true);
+    }
+  };
 
   // Lock background body scroll when modal is open
   useEffect(() => {
@@ -567,14 +791,19 @@ function ReportsModal({ open, onClose, transactions = [] }) {
               width: { xs: 28, sm: 38 },
               height: { xs: 28, sm: 38 },
               borderRadius: "8px",
-              background:
-                theme.palette.custom?.primaryGradient ||
-                "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              background: isAdmin
+                ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                : theme.palette.custom?.primaryGradient ||
+                  "linear-gradient(135deg, #10b981 0%, #059669 100%)",
               color: "#ffffff",
               boxShadow: "0 2px 10px rgba(16, 185, 129, 0.35)",
             }}
           >
-            <AssessmentIcon sx={{ fontSize: { xs: 17, sm: 22 } }} />
+            {isAdmin ? (
+              <PeopleAltIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
+            ) : (
+              <AssessmentIcon sx={{ fontSize: { xs: 17, sm: 22 } }} />
+            )}
           </Box>
           <Box>
             <Box display="flex" alignItems="center" gap={0.8}>
@@ -588,7 +817,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                   lineHeight: 1.15,
                 }}
               >
-                Reports & Analytics
+                {isAdmin ? "Users & Membership Analytics Report" : "Reports & Analytics"}
               </Typography>
             </Box>
             <Typography
@@ -599,16 +828,45 @@ function ReportsModal({ open, onClose, transactions = [] }) {
                 display: { xs: "none", sm: "block" },
               }}
             >
-              Real-time Portfolio Intelligence & Cash Flow
+              {isAdmin
+                ? "Real-time Member Intelligence, Subscription Revenue, Lifecycle Metrics & Directory Details"
+                : "Real-time Portfolio Intelligence & Cash Flow"}
             </Typography>
           </Box>
         </Box>
 
-        {/* Action Controls: One-Tap Digest Copy & Close */}
+        {/* Action Controls: Refresh, One-Tap Digest Copy & Close */}
         <Box display="flex" alignItems="center" gap={0.8}>
-          <Tooltip title="Copy Portfolio Digest" arrow>
+          {isAdmin && (
+            <Tooltip title="Refresh User & Payment Records" arrow>
+              <IconButton
+                onClick={fetchAdminData}
+                disabled={adminLoading}
+                size="small"
+                sx={{
+                  color: theme.palette.primary.main,
+                  p: { xs: 0.6, sm: 0.8 },
+                  borderRadius: "8px",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  backgroundColor: "rgba(16, 185, 129, 0.1)",
+                  "&:hover": {
+                    backgroundColor: "rgba(16, 185, 129, 0.2)",
+                  },
+                }}
+              >
+                <RefreshIcon
+                  sx={{
+                    fontSize: { xs: 16, sm: 18 },
+                    animation: adminLoading ? "spin 1s linear infinite" : "none",
+                  }}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          <Tooltip title={isAdmin ? "Copy Executive User Report" : "Copy Portfolio Digest"} arrow>
             <IconButton
-              onClick={handleCopyDigest}
+              onClick={isAdmin ? handleCopyUserReport : handleCopyDigest}
               size="small"
               sx={{
                 color: theme.palette.primary.main,
@@ -651,6 +909,1082 @@ function ReportsModal({ open, onClose, transactions = [] }) {
           overflowY: "auto",
         }}
       >
+        {isAdmin ? (
+          <Box
+            sx={{
+              maxWidth: 1100,
+              mx: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: { xs: 1.5, sm: 2.5 },
+              pb: 3,
+            }}
+          >
+            {/* Top Navigation Tabs */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 0.6,
+                borderRadius: 2,
+                background:
+                  theme.palette.mode === "dark"
+                    ? "rgba(25, 25, 30, 0.7)"
+                    : "rgba(240, 243, 246, 0.8)",
+                border: `1px solid ${theme.palette.divider}`,
+              }}
+            >
+              <Tabs
+                value={adminReportTab}
+                onChange={(e, val) => setAdminReportTab(val)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  minHeight: 40,
+                  "& .MuiTab-root": {
+                    minHeight: 40,
+                    py: 0.6,
+                    px: { xs: 1.5, sm: 2.5 },
+                    borderRadius: 1.5,
+                    fontWeight: 700,
+                    fontSize: { xs: "0.78rem", sm: "0.85rem" },
+                    textTransform: "none",
+                    color: theme.palette.text.secondary,
+                    "&.Mui-selected": {
+                      color: "#ffffff",
+                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                    },
+                  },
+                  "& .MuiTabs-indicator": { display: "none" },
+                }}
+              >
+                <Tab
+                  value="OVERVIEW"
+                  label="Overview & Intelligence"
+                  icon={<BarChartIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                />
+                <Tab
+                  value="DIRECTORY"
+                  label={`User Directory & Details (${userStats.total})`}
+                  icon={<PeopleAltIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                />
+                <Tab
+                  value="LEDGER"
+                  label={`Subscription Receipts Ledger (${auditList.length})`}
+                  icon={<ReceiptLongIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                />
+              </Tabs>
+            </Paper>
+
+            {/* TAB 1: OVERVIEW & INTELLIGENCE */}
+            {adminReportTab === "OVERVIEW" && (
+              <>
+                {/* KPI Cards Grid */}
+                <Grid container spacing={{ xs: 1, sm: 2 }}>
+                  {/* Card 1: Total Users */}
+                  <Grid item xs={6} sm={3}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: { xs: 1.5, sm: 2.2 },
+                        borderRadius: 2.5,
+                        background:
+                          theme.palette.mode === "dark"
+                            ? "linear-gradient(145deg, rgba(16, 185, 129, 0.12) 0%, rgba(20, 20, 24, 0.95) 100%)"
+                            : "linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(255, 255, 255, 0.95) 100%)",
+                        border: "1px solid rgba(16, 185, 129, 0.3)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                        <Typography variant="caption" sx={{ color: "#10b981", fontWeight: 800 }}>
+                          TOTAL USERS
+                        </Typography>
+                        <PeopleAltIcon sx={{ fontSize: 20, color: "#10b981" }} />
+                      </Box>
+                      <Typography variant="h4" fontWeight="800" sx={{ letterSpacing: "-0.02em", mb: 0.5 }}>
+                        {userStats.total}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {userStats.approved} Active • {userStats.pending} Pending • {userStats.inactive} Inactive
+                      </Typography>
+                    </Paper>
+                  </Grid>
+
+                  {/* Card 2: Active Premium Members */}
+                  <Grid item xs={6} sm={3}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: { xs: 1.5, sm: 2.2 },
+                        borderRadius: 2.5,
+                        background:
+                          theme.palette.mode === "dark"
+                            ? "linear-gradient(145deg, rgba(229, 193, 88, 0.14) 0%, rgba(20, 20, 24, 0.95) 100%)"
+                            : "linear-gradient(145deg, rgba(229, 193, 88, 0.1) 0%, rgba(255, 255, 255, 0.95) 100%)",
+                        border: "1px solid rgba(229, 193, 88, 0.45)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                        <Typography variant="caption" sx={{ color: "#F5D77F", fontWeight: 800 }}>
+                          ACTIVE PREMIUM
+                        </Typography>
+                        <WorkspacePremiumIcon sx={{ fontSize: 20, color: "#E5C158" }} />
+                      </Box>
+                      <Typography
+                        variant="h4"
+                        fontWeight="800"
+                        sx={{ color: "#F5D77F", letterSpacing: "-0.02em", mb: 0.5 }}
+                      >
+                        {userStats.activePremium}{" "}
+                        <span style={{ fontSize: "0.9rem", color: theme.palette.text.secondary }}>
+                          ({userStats.premiumConversionRate}%)
+                        </span>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {userStats.expiringSoon > 0
+                          ? `${userStats.expiringSoon} Expiring Soon (<30d)`
+                          : "All active in good standing"}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+
+                  {/* Card 3: Subscription Revenue */}
+                  <Grid item xs={6} sm={3}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: { xs: 1.5, sm: 2.2 },
+                        borderRadius: 2.5,
+                        background:
+                          theme.palette.mode === "dark"
+                            ? "linear-gradient(145deg, rgba(56, 189, 248, 0.12) 0%, rgba(20, 20, 24, 0.95) 100%)"
+                            : "linear-gradient(145deg, rgba(56, 189, 248, 0.08) 0%, rgba(255, 255, 255, 0.95) 100%)",
+                        border: "1px solid rgba(56, 189, 248, 0.35)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                        <Typography variant="caption" sx={{ color: "#38bdf8", fontWeight: 800 }}>
+                          SUBSCRIPTION REVENUE
+                        </Typography>
+                        <PaymentsIcon sx={{ fontSize: 20, color: "#38bdf8" }} />
+                      </Box>
+                      <Typography variant="h4" fontWeight="800" sx={{ letterSpacing: "-0.02em", mb: 0.5 }}>
+                        ₹{userStats.totalRevenue.toLocaleString("en-IN")}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        ARPU: ₹{userStats.avgRevenue.toLocaleString("en-IN")} • {auditList.length} Receipts
+                      </Typography>
+                    </Paper>
+                  </Grid>
+
+                  {/* Card 4: Google Sheets Tabs Provisioned */}
+                  <Grid item xs={6} sm={3}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: { xs: 1.5, sm: 2.2 },
+                        borderRadius: 2.5,
+                        background:
+                          theme.palette.mode === "dark"
+                            ? "linear-gradient(145deg, rgba(168, 85, 247, 0.12) 0%, rgba(20, 20, 24, 0.95) 100%)"
+                            : "linear-gradient(145deg, rgba(168, 85, 247, 0.08) 0%, rgba(255, 255, 255, 0.95) 100%)",
+                        border: "1px solid rgba(168, 85, 247, 0.35)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                        <Typography variant="caption" sx={{ color: "#c084fc", fontWeight: 800 }}>
+                          SHEETS TABS BOUND
+                        </Typography>
+                        <TableChartIcon sx={{ fontSize: 20, color: "#c084fc" }} />
+                      </Box>
+                      <Typography variant="h4" fontWeight="800" sx={{ letterSpacing: "-0.02em", mb: 0.5 }}>
+                        {userStats.tabsBound} / {userStats.total}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        19-Column Schema & Live Audits Tab
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Visual Analytics Grid */}
+                <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+                  {/* Subscriptions by Plan */}
+                  <Grid item xs={12} md={6}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2.5,
+                        borderRadius: 2.5,
+                        background: theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                        border: `1px solid ${theme.palette.divider}`,
+                        height: "100%",
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" gap={1} mb={2}>
+                        <WorkspacePremiumIcon sx={{ color: "#E5C158", fontSize: 22 }} />
+                        <Typography variant="subtitle1" fontWeight="800">
+                          Subscription Plans Breakdown
+                        </Typography>
+                      </Box>
+
+                      <Box display="flex" flexDirection="column" gap={1.8}>
+                        {[
+                          { id: "1M", label: "Monthly", period: "1 Month", color: "#8b5cf6" },
+                          { id: "6M", label: "Half-Yearly", period: "6 Months", color: "#06b6d4" },
+                          { id: "1Y", label: "Yearly", period: "1 Year", color: "#E5C158" },
+                        ].map((plan) => {
+                          const count = usersList.filter((u) => {
+                            const p = String(u.premiumPlan || "").toLowerCase();
+                            return (
+                              p.includes(plan.id.toLowerCase()) ||
+                              p.includes(plan.label.toLowerCase()) ||
+                              p.includes(plan.period.toLowerCase())
+                            );
+                          }).length;
+                          const pct =
+                            userStats.total > 0
+                              ? Math.round((count / userStats.total) * 100)
+                              : 0;
+
+                          return (
+                            <Box key={plan.id}>
+                              <Box
+                                display="flex"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                mb={0.6}
+                              >
+                                <Typography variant="caption" fontWeight="700">
+                                  {plan.label}{" "}
+                                  <span style={{ color: theme.palette.text.secondary }}>
+                                    ({plan.period})
+                                  </span>
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight="800"
+                                  sx={{ color: plan.color }}
+                                >
+                                  {count} users ({pct}%)
+                                </Typography>
+                              </Box>
+                              <LinearProgress
+                                variant="determinate"
+                                value={pct}
+                                sx={{
+                                  height: 7,
+                                  borderRadius: 4,
+                                  bgcolor: "rgba(255, 255, 255, 0.06)",
+                                  "& .MuiLinearProgress-bar": {
+                                    bgcolor: plan.color,
+                                    borderRadius: 4,
+                                  },
+                                }}
+                              />
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </Paper>
+                  </Grid>
+
+                  {/* Payment Methods Breakdown & Lifecycle Radar */}
+                  <Grid item xs={12} md={6}>
+                    <Box display="flex" flexDirection="column" gap={2} height="100%">
+                      {/* Payment Methods */}
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 2.5,
+                          background:
+                            theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                          border: `1px solid ${theme.palette.divider}`,
+                        }}
+                      >
+                        <Box display="flex" alignItems="center" gap={1} mb={2}>
+                          <PaymentsIcon sx={{ color: "#10b981", fontSize: 22 }} />
+                          <Typography variant="subtitle1" fontWeight="800">
+                            Payment Methods & Channels
+                          </Typography>
+                        </Box>
+
+                        <Box display="flex" flexDirection="column" gap={1.6}>
+                          {[
+                            {
+                              label: "UPI (GPay)",
+                              count: usersList.filter(
+                                (u) =>
+                                  String(u.premiumPaymentMethod || "").toLowerCase().includes("upi") ||
+                                  String(u.premiumPaymentMethod || "").toLowerCase().includes("gpay")
+                              ).length,
+                              color: "#10b981",
+                            },
+                            {
+                              label: "Bank Transfer (NEFT / IMPS)",
+                              count: usersList.filter((u) =>
+                                String(u.premiumPaymentMethod || "").toLowerCase().includes("bank")
+                              ).length,
+                              color: "#06b6d4",
+                            },
+                            {
+                              label: "Cash In-Hand",
+                              count: usersList.filter((u) =>
+                                String(u.premiumPaymentMethod || "").toLowerCase().includes("cash")
+                              ).length,
+                              color: "#f59e0b",
+                            },
+                            {
+                              label: "Cards / Online NetBanking",
+                              count: usersList.filter(
+                                (u) =>
+                                  String(u.premiumPaymentMethod || "").toLowerCase().includes("card") ||
+                                  String(u.premiumPaymentMethod || "").toLowerCase().includes("net")
+                              ).length,
+                              color: "#8b5cf6",
+                            },
+                            {
+                              label: "Complimentary / Admin Waiver",
+                              count: usersList.filter(
+                                (u) =>
+                                  String(u.premiumPaymentMethod || "")
+                                    .toLowerCase()
+                                    .includes("complimentary") ||
+                                  String(u.premiumPaymentMethod || "")
+                                    .toLowerCase()
+                                    .includes("waiver")
+                              ).length,
+                              color: "#94a3b8",
+                            },
+                          ].map((pm) => {
+                            const pct =
+                              userStats.activePremium > 0
+                                ? Math.round((pm.count / userStats.activePremium) * 100)
+                                : 0;
+                            return (
+                              <Box key={pm.label}>
+                                <Box
+                                  display="flex"
+                                  justifyContent="space-between"
+                                  alignItems="center"
+                                  mb={0.5}
+                                >
+                                  <Typography variant="caption" fontWeight="700">
+                                    {pm.label}
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    fontWeight="800"
+                                    sx={{ color: pm.color }}
+                                  >
+                                    {pm.count} paid
+                                  </Typography>
+                                </Box>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={pct}
+                                  sx={{
+                                    height: 6,
+                                    borderRadius: 4,
+                                    bgcolor: "rgba(255, 255, 255, 0.06)",
+                                    "& .MuiLinearProgress-bar": {
+                                      bgcolor: pm.color,
+                                      borderRadius: 4,
+                                    },
+                                  }}
+                                />
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      </Paper>
+
+                      {/* Membership Lifecycle Horizon */}
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2.2,
+                          borderRadius: 2.5,
+                          background:
+                            theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                          border: `1px solid ${theme.palette.divider}`,
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight="800" mb={1.5}>
+                          Membership Lifecycle Horizon
+                        </Typography>
+                        <Grid container spacing={1}>
+                          <Grid item xs={6} sm={3}>
+                            <Box
+                              p={1.2}
+                              borderRadius={2}
+                              bgcolor="rgba(16, 185, 129, 0.1)"
+                              border="1px solid rgba(16, 185, 129, 0.25)"
+                              textAlign="center"
+                            >
+                              <Typography
+                                variant="h6"
+                                fontWeight="800"
+                                sx={{ color: "#10b981", lineHeight: 1.1 }}
+                              >
+                                {userStats.activePremium - userStats.expiringSoon}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontSize: "0.68rem", color: "text.secondary" }}
+                              >
+                                Active &gt;30d
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Box
+                              p={1.2}
+                              borderRadius={2}
+                              bgcolor="rgba(245, 158, 11, 0.1)"
+                              border="1px solid rgba(245, 158, 11, 0.25)"
+                              textAlign="center"
+                            >
+                              <Typography
+                                variant="h6"
+                                fontWeight="800"
+                                sx={{ color: "#f59e0b", lineHeight: 1.1 }}
+                              >
+                                {userStats.expiringSoon}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontSize: "0.68rem", color: "text.secondary" }}
+                              >
+                                Expiring &lt;30d
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Box
+                              p={1.2}
+                              borderRadius={2}
+                              bgcolor="rgba(239, 68, 68, 0.1)"
+                              border="1px solid rgba(239, 68, 68, 0.25)"
+                              textAlign="center"
+                            >
+                              <Typography
+                                variant="h6"
+                                fontWeight="800"
+                                sx={{ color: "#ef4444", lineHeight: 1.1 }}
+                              >
+                                {userStats.expired + userStats.revoked}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontSize: "0.68rem", color: "text.secondary" }}
+                              >
+                                Expired/Revoked
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Box
+                              p={1.2}
+                              borderRadius={2}
+                              bgcolor="rgba(148, 163, 184, 0.1)"
+                              border="1px solid rgba(148, 163, 184, 0.25)"
+                              textAlign="center"
+                            >
+                              <Typography
+                                variant="h6"
+                                fontWeight="800"
+                                sx={{ color: "#94a3b8", lineHeight: 1.1 }}
+                              >
+                                {userStats.standard}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontSize: "0.68rem", color: "text.secondary" }}
+                              >
+                                Standard Free
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </>
+            )}
+
+            {/* TAB 2: USER DIRECTORY & RELATED DETAILS */}
+            {adminReportTab === "DIRECTORY" && (
+              <Box display="flex" flexDirection="column" gap={2}>
+                {/* Search & Category Filter Toolbar */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    background:
+                      theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                    border: `1px solid ${theme.palette.divider}`,
+                    display: "flex",
+                    flexDirection: { xs: "column", md: "row" },
+                    alignItems: { xs: "stretch", md: "center" },
+                    justifyContent: "space-between",
+                    gap: 1.5,
+                  }}
+                >
+                  <Tabs
+                    value={userFilterTab}
+                    onChange={(e, val) => setUserFilterTab(val)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{
+                      minHeight: 34,
+                      "& .MuiTab-root": {
+                        minHeight: 32,
+                        py: 0.4,
+                        px: 1.6,
+                        borderRadius: 1.5,
+                        fontWeight: 700,
+                        fontSize: "0.76rem",
+                        textTransform: "none",
+                        color: theme.palette.text.secondary,
+                        "&.Mui-selected": {
+                          color: "#ffffff",
+                          background: theme.palette.primary.main,
+                        },
+                      },
+                      "& .MuiTabs-indicator": { display: "none" },
+                    }}
+                  >
+                    <Tab value="ALL" label={`All (${userStats.total})`} />
+                    <Tab value="APPROVED" label={`Approved (${userStats.approved})`} />
+                    <Tab value="PENDING" label={`Pending (${userStats.pending})`} />
+                    <Tab value="PREMIUM" label={`Premium (${userStats.activePremium})`} />
+                    <Tab value="STANDARD" label={`Standard (${userStats.standard})`} />
+                    <Tab value="INACTIVE" label={`Inactive (${userStats.inactive})`} />
+                  </Tabs>
+
+                  <TextField
+                    size="small"
+                    placeholder="Search member, plan, tab, ref..."
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    sx={{ width: { xs: "100%", md: 260 } }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" sx={{ color: "text.secondary" }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Paper>
+
+                {/* User Detail Cards */}
+                {adminLoading ? (
+                  <Box textAlign="center" py={6}>
+                    <CircularProgress size={36} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Loading member details from Google Sheets...
+                    </Typography>
+                  </Box>
+                ) : filteredUsersList.length === 0 ? (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 6,
+                      textAlign: "center",
+                      borderRadius: 2.5,
+                      background:
+                        theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                      border: `1px solid ${theme.palette.divider}`,
+                    }}
+                  >
+                    <PeopleAltIcon
+                      sx={{ fontSize: 48, color: "text.secondary", opacity: 0.4, mb: 1 }}
+                    />
+                    <Typography variant="subtitle1" fontWeight="700">
+                      No users matched your filter
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Try adjusting your search query or switching tabs.
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <Box display="flex" flexDirection="column" gap={1.5}>
+                    {filteredUsersList.map((u) => {
+                      const daysLeft = u.premiumExpiresAt
+                        ? Math.max(
+                            0,
+                            Math.ceil(
+                              (new Date(u.premiumExpiresAt).getTime() - Date.now()) /
+                                (1000 * 60 * 60 * 24)
+                            )
+                          )
+                        : null;
+
+                      return (
+                        <Paper
+                          key={u.id || u.username}
+                          elevation={0}
+                          sx={{
+                            p: { xs: 2, sm: 2.4 },
+                            borderRadius: 2.5,
+                            background:
+                              theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                            border: `1px solid ${
+                              u.isPremiumActive
+                                ? "rgba(229, 193, 88, 0.35)"
+                                : theme.palette.divider
+                            }`,
+                            transition: "all 0.2s ease",
+                            "&:hover": {
+                              borderColor: u.isPremiumActive
+                                ? "#E5C158"
+                                : theme.palette.primary.main,
+                              boxShadow: u.isPremiumActive
+                                ? "0 4px 18px rgba(229, 193, 88, 0.15)"
+                                : `0 4px 16px ${theme.palette.primary.main}1A`,
+                            },
+                          }}
+                        >
+                          <Grid container spacing={2} alignItems="center">
+                            {/* User Identity */}
+                            <Grid item xs={12} sm={4}>
+                              <Box display="flex" alignItems="center" gap={1.8}>
+                                <Avatar
+                                  src={u.avatar || u.photoURL || undefined}
+                                  sx={{
+                                    width: 44,
+                                    height: 44,
+                                    bgcolor: u.isPremiumActive
+                                      ? "rgba(229, 193, 88, 0.2)"
+                                      : "rgba(16, 185, 129, 0.2)",
+                                    color: u.isPremiumActive ? "#F5D77F" : "#10b981",
+                                    fontWeight: 800,
+                                    fontSize: "0.95rem",
+                                    border: u.isPremiumActive
+                                      ? "1.5px solid rgba(229, 193, 88, 0.5)"
+                                      : "1.5px solid rgba(16, 185, 129, 0.3)",
+                                  }}
+                                >
+                                  {String(u.fullName || u.username || "U")
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </Avatar>
+                                <Box minWidth={0}>
+                                  <Box display="flex" alignItems="center" gap={0.8} flexWrap="wrap">
+                                    <Typography
+                                      variant="subtitle2"
+                                      fontWeight="800"
+                                      noWrap
+                                      sx={{
+                                        color: u.isPremiumActive
+                                          ? "#F5D77F"
+                                          : theme.palette.text.primary,
+                                      }}
+                                    >
+                                      {u.fullName || u.username}
+                                    </Typography>
+                                    {u.role === "ADMIN" && (
+                                      <Chip
+                                        size="small"
+                                        label="ADMIN"
+                                        sx={{
+                                          height: 18,
+                                          fontSize: "0.62rem",
+                                          fontWeight: 800,
+                                          bgcolor: "rgba(16, 185, 129, 0.15)",
+                                          color: "#10b981",
+                                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                                        }}
+                                      />
+                                    )}
+                                  </Box>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                    noWrap
+                                  >
+                                    @{u.username} •{" "}
+                                    {u.joined || u.createdAt
+                                      ? `Joined: ${u.joined || u.createdAt}`
+                                      : "Registered Member"}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </Grid>
+
+                            {/* Status & Plan */}
+                            <Grid item xs={6} sm={3}>
+                              <Box display="flex" flexDirection="column" gap={0.6}>
+                                <Box display="flex" alignItems="center" gap={0.8} flexWrap="wrap">
+                                  <Chip
+                                    size="small"
+                                    label={u.status || "APPROVED"}
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.68rem",
+                                      fontWeight: 800,
+                                      bgcolor:
+                                        u.status === "APPROVED"
+                                          ? "rgba(16, 185, 129, 0.15)"
+                                          : u.status === "PENDING"
+                                          ? "rgba(245, 158, 11, 0.15)"
+                                          : "rgba(107, 114, 128, 0.15)",
+                                      color:
+                                        u.status === "APPROVED"
+                                          ? "#10b981"
+                                          : u.status === "PENDING"
+                                          ? "#f59e0b"
+                                          : "#9ca3af",
+                                      border: `1px solid ${
+                                        u.status === "APPROVED"
+                                          ? "rgba(16, 185, 129, 0.3)"
+                                          : u.status === "PENDING"
+                                          ? "rgba(245, 158, 11, 0.3)"
+                                          : "rgba(107, 114, 128, 0.3)"
+                                      }`,
+                                    }}
+                                  />
+
+                                  {u.isPremiumActive ? (
+                                    <Chip
+                                      size="small"
+                                      icon={
+                                        <WorkspacePremiumIcon
+                                          sx={{ fontSize: 13, color: "#1a1500" }}
+                                        />
+                                      }
+                                      label={
+                                        daysLeft !== null
+                                          ? `PREMIUM • ${daysLeft}d left`
+                                          : "PREMIUM"
+                                      }
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.68rem",
+                                        fontWeight: 800,
+                                        bgcolor: "#E5C158",
+                                        color: "#1a1500",
+                                      }}
+                                    />
+                                  ) : (
+                                    <Chip
+                                      size="small"
+                                      label="STANDARD"
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.68rem",
+                                        fontWeight: 700,
+                                        bgcolor: "rgba(255, 255, 255, 0.05)",
+                                        color: "text.secondary",
+                                      }}
+                                    />
+                                  )}
+                                </Box>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: theme.palette.text.secondary,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {u.premiumPlan ||
+                                    (u.isPremiumActive ? "Active VIP Pass" : "Standard Tier")}
+                                </Typography>
+                              </Box>
+                            </Grid>
+
+                            {/* Subscription Financials & Payment Method */}
+                            <Grid item xs={6} sm={3}>
+                              <Box display="flex" flexDirection="column" gap={0.4}>
+                                <Typography variant="body2" fontWeight="800">
+                                  {u.premiumAmountPaid
+                                    ? `₹${Number(u.premiumAmountPaid).toLocaleString("en-IN")}`
+                                    : "₹0"}
+                                  <span
+                                    style={{
+                                      fontSize: "0.74rem",
+                                      fontWeight: 500,
+                                      color: theme.palette.text.secondary,
+                                      marginLeft: 6,
+                                    }}
+                                  >
+                                    {u.premiumPaymentMethod || "None"}
+                                  </span>
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" noWrap>
+                                  {u.premiumPaymentRef
+                                    ? `Ref: ${u.premiumPaymentRef}`
+                                    : "No payment ref"}
+                                </Typography>
+                              </Box>
+                            </Grid>
+
+                            {/* Sheet Tab & Validity Horizon */}
+                            <Grid item xs={12} sm={2}>
+                              <Box
+                                display="flex"
+                                flexDirection="column"
+                                gap={0.4}
+                                textAlign={{ xs: "left", sm: "right" }}
+                              >
+                                <Chip
+                                  size="small"
+                                  icon={
+                                    <TableChartIcon
+                                      sx={{ fontSize: 12, color: "#10b981 !important" }}
+                                    />
+                                  }
+                                  label={u.sheetTab || "No Tab"}
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.68rem",
+                                    fontWeight: 700,
+                                    fontFamily: "monospace",
+                                    bgcolor: "rgba(16, 185, 129, 0.08)",
+                                    color: "#10b981",
+                                    alignSelf: { xs: "flex-start", sm: "flex-end" },
+                                  }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ fontSize: "0.68rem" }}
+                                >
+                                  {u.premiumExpiresAt
+                                    ? `Expires: ${new Date(
+                                        u.premiumExpiresAt
+                                      ).toLocaleDateString()}`
+                                    : "Standard Account"}
+                                </Typography>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {/* TAB 3: SUBSCRIPTION RECEIPTS LEDGER */}
+            {adminReportTab === "LEDGER" && (
+              <Box display="flex" flexDirection="column" gap={2}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2.5,
+                    background:
+                      theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                    border: `1px solid ${theme.palette.divider}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Box display="flex" alignItems="center" gap={1.2}>
+                    <ReceiptLongIcon sx={{ color: "#E5C158", fontSize: 24 }} />
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight="800">
+                        Subscription Payments Audit Ledger
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Immutable, chronological payment stream recorded across all member subscriptions
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Chip
+                    size="small"
+                    label={`${auditList.length} Receipts`}
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgba(229, 193, 88, 0.15)",
+                      color: "#F5D77F",
+                    }}
+                  />
+                </Paper>
+
+                {adminLoading ? (
+                  <Box textAlign="center" py={6}>
+                    <CircularProgress size={36} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Loading payment receipts...
+                    </Typography>
+                  </Box>
+                ) : auditList.length === 0 ? (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 6,
+                      textAlign: "center",
+                      borderRadius: 2.5,
+                      background:
+                        theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                      border: `1px solid ${theme.palette.divider}`,
+                    }}
+                  >
+                    <ReceiptLongIcon
+                      sx={{ fontSize: 48, color: "text.secondary", opacity: 0.4, mb: 1 }}
+                    />
+                    <Typography variant="subtitle1" fontWeight="700">
+                      No subscription receipts recorded yet
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Payments recorded via "Enter Subscription Payment" will appear in this ledger.
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <Box display="flex" flexDirection="column" gap={1.2}>
+                    {auditList.map((aud, idx) => (
+                      <Paper
+                        key={aud.id || idx}
+                        elevation={0}
+                        sx={{
+                          p: { xs: 1.8, sm: 2.2 },
+                          borderRadius: 2,
+                          background:
+                            theme.palette.custom?.cardGradient || "rgba(25, 25, 30, 0.6)",
+                          border: "1px solid rgba(229, 193, 88, 0.25)",
+                        }}
+                      >
+                        <Grid container spacing={1.5} alignItems="center">
+                          <Grid item xs={12} sm={3}>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Chip
+                                size="small"
+                                label={aud.action || "ACTIVATE"}
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 800,
+                                  bgcolor:
+                                    aud.action === "REVOKE"
+                                      ? "rgba(239, 68, 68, 0.15)"
+                                      : "rgba(16, 185, 129, 0.15)",
+                                  color: aud.action === "REVOKE" ? "#ef4444" : "#10b981",
+                                }}
+                              />
+                              <Typography variant="subtitle2" fontWeight="800">
+                                @{aud.username || aud.targetUsername}
+                              </Typography>
+                            </Box>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              display="block"
+                            >
+                              {aud.timestamp
+                                ? new Date(aud.timestamp).toLocaleString()
+                                : "Recent"}
+                            </Typography>
+                          </Grid>
+
+                          <Grid item xs={6} sm={3}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              display="block"
+                            >
+                              Plan / Membership
+                            </Typography>
+                            <Typography variant="body2" fontWeight="700">
+                              {aud.planName || "Annual VIP Pass"}
+                            </Typography>
+                          </Grid>
+
+                          <Grid item xs={6} sm={3}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              display="block"
+                            >
+                              Amount Paid & Mode
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              fontWeight="800"
+                              sx={{ color: "#10b981" }}
+                            >
+                              +₹{Number(aud.amountPaid || 0).toLocaleString("en-IN")}{" "}
+                              <span
+                                style={{
+                                  fontSize: "0.74rem",
+                                  color: theme.palette.text.secondary,
+                                }}
+                              >
+                                ({aud.paymentMethod || "UPI"})
+                              </span>
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              display="block"
+                              noWrap
+                            >
+                              {aud.paymentReference
+                                ? `Ref: ${aud.paymentReference}`
+                                : "No UTR"}
+                            </Typography>
+                          </Grid>
+
+                          <Grid
+                            item
+                            xs={12}
+                            sm={3}
+                            textAlign={{ xs: "left", sm: "right" }}
+                          >
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              display="block"
+                            >
+                              Validity Window
+                            </Typography>
+                            <Typography variant="caption" fontWeight="700">
+                              {aud.validUntil ? `Until: ${aud.validUntil}` : "Lifetime"}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              display="block"
+                            >
+                              Admin: @{aud.adminUsername || "admin"}
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        ) : (
         <Box
           sx={{
             maxWidth: 1050,
@@ -2173,6 +3507,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             </Grid>
           </Grid>
         </Box>
+        )}
       </DialogContent>
 
       {/* Toast Notification on Copy Digest */}
@@ -2196,7 +3531,7 @@ function ReportsModal({ open, onClose, transactions = [] }) {
             borderRadius: "10px",
           }}
         >
-          Portfolio digest copied to clipboard!
+          {copiedText}
         </Alert>
       </Snackbar>
     </Dialog>
