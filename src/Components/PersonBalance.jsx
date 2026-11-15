@@ -686,10 +686,10 @@ function PersonBalance({
                             deleteIcon={
                               <CheckCircleOutlineIcon
                                 sx={{
-                                  fontSize: "0.95rem !important",
+                                  fontSize: { xs: "1.5rem !important", sm: "0.95rem !important" },
                                   color: "inherit !important",
-                                  marginLeft: "4px !important",
-                                  marginRight: "-2px !important",
+                                  marginLeft: { xs: "6px !important", sm: "4px !important" },
+                                  marginRight: { xs: "-4px !important", sm: "-2px !important" },
                                   opacity: 0.95,
                                 }}
                               />
