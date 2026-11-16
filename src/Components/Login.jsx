@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Container,
   Typography,
   TextField,
   Button,
   Paper,
-  Fade,
   Tab,
   Tabs,
   Alert,
@@ -27,6 +25,7 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CloseIcon from '@mui/icons-material/Close';
 import logo from '../assets/logo.png';
+import LoginScene from './LoginScene';
 import { loginUser, registerUser, requestPasswordReset } from '../Services/SheetService';
 
 const Login = ({ onLogin }) => {
@@ -227,456 +226,455 @@ const Login = ({ onLogin }) => {
         background: theme.palette.custom?.pageBackground || theme.palette.background.default,
         py: { xs: 4, sm: 6 },
         px: 2,
+        overflow: 'hidden',
       }}
     >
-      <Fade in timeout={600}>
-        <Container maxWidth="xs">
-          <Paper
-            elevation={24}
-            sx={{
-              p: { xs: 3.5, sm: 4.5 },
-              borderRadius: { xs: 2.5, sm: 3.5 },
-              background: theme.palette.background.paper,
-              border: `1px solid ${theme.palette.divider}`,
-              boxShadow: theme.palette.custom?.paperShadow || theme.shadows[10],
-              backdropFilter: 'blur(30px) saturate(180%)',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Header / Title */}
-            <Box textAlign="center" mb={3}>
-              <Box
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: { xs: 54, sm: 60 },
-                  height: { xs: 54, sm: 60 },
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  boxShadow: `0 6px 18px ${theme.palette.primary.main}4D`,
-                  mb: 1.5,
-                  mx: "auto",
-                }}
-              >
-                <Box
-                  component="img"
-                  src={logo}
-                  alt="Ash Flow Logo"
-                  sx={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                  }}
-                />
-              </Box>
-              <Typography
-                variant="h4"
-                fontWeight="800"
-                sx={{
-                  background:
-                    theme.palette.custom?.titleGradient ||
-                    'linear-gradient(90deg, #1976d2, #9c27b0)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  mb: 0.5,
-                  fontSize: { xs: '1.75rem', sm: '2rem' },
-                }}
-              >
-                ASH FLOW
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {tabIndex === 0
-                  ? 'Sign in to access your personal finance dashboard'
-                  : 'Create an account to track your money'}
-              </Typography>
-            </Box>
-
-            {/* Navigation Tabs (Login / Register) */}
-            <Tabs
-              value={tabIndex}
-              onChange={handleTabChange}
-              variant="fullWidth"
+      <LoginScene>
+        <Paper
+          elevation={24}
+          sx={{
+            p: { xs: 3.5, sm: 4.5 },
+            borderRadius: { xs: 2.5, sm: 3.5 },
+            background: theme.palette.background.paper,
+            border: `1px solid ${theme.palette.divider}`,
+            boxShadow: theme.palette.custom?.paperShadow || theme.shadows[10],
+            backdropFilter: 'blur(30px) saturate(180%)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Header / Title */}
+          <Box textAlign="center" mb={3}>
+            <Box
               sx={{
-                mb: 3,
-                minHeight: 42,
-                borderRadius: 2,
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(255, 255, 255, 0.04)'
-                    : 'rgba(0, 0, 0, 0.04)',
-                p: 0.5,
-                '& .MuiTabs-indicator': {
-                  height: '100%',
-                  borderRadius: 1.5,
-                  backgroundColor: theme.palette.primary.main,
-                  zIndex: 0,
-                  opacity: 0.15,
-                },
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: { xs: 54, sm: 60 },
+                height: { xs: 54, sm: 60 },
+                borderRadius: "12px",
+                overflow: "hidden",
+                boxShadow: `0 6px 18px ${theme.palette.primary.main}4D`,
+                mb: 1.5,
+                mx: "auto",
               }}
             >
-              <Tab
-                icon={<LoginIcon sx={{ fontSize: 18 }} />}
-                iconPosition="start"
-                label="Sign In"
+              <Box
+                component="img"
+                src={logo}
+                alt="Ash Flow Logo"
                 sx={{
-                  minHeight: 38,
-                  fontWeight: tabIndex === 0 ? 800 : 600,
-                  fontSize: '0.88rem',
-                  textTransform: 'none',
-                  zIndex: 1,
-                  color:
-                    tabIndex === 0
-                      ? theme.palette.primary.main
-                      : theme.palette.text.secondary,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
                 }}
               />
-              <Tab
-                icon={<PersonAddIcon sx={{ fontSize: 18 }} />}
-                iconPosition="start"
-                label="Register"
-                sx={{
-                  minHeight: 38,
-                  fontWeight: tabIndex === 1 ? 800 : 600,
-                  fontSize: '0.88rem',
-                  textTransform: 'none',
-                  zIndex: 1,
-                  color:
-                    tabIndex === 1
-                      ? theme.palette.primary.main
-                      : theme.palette.text.secondary,
-                }}
-              />
-            </Tabs>
+            </Box>
+            <Typography
+              variant="h4"
+              fontWeight="800"
+              sx={{
+                background:
+                  theme.palette.custom?.titleGradient ||
+                  'linear-gradient(90deg, #1976d2, #9c27b0)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: 0.5,
+                fontSize: { xs: '1.75rem', sm: '2rem' },
+              }}
+            >
+              ASH FLOW
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {tabIndex === 0
+                ? 'Sign in to access your personal finance dashboard'
+                : 'Create an account to track your money'}
+            </Typography>
+          </Box>
 
-            {/* Registration Success Confirmation Card */}
-            {registrationSuccess ? (
-              <Box textAlign="center" py={2}>
-                <CheckCircleOutlineIcon
-                  sx={{ fontSize: 56, color: theme.palette.success.main, mb: 1.5 }}
-                />
-                <Typography variant="h6" fontWeight="800" sx={{ mb: 1 }}>
-                  Registration Submitted!
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Your account for <strong>@{username}</strong> is currently{' '}
-                  <span
-                    style={{
-                      color: '#f59e0b',
-                      fontWeight: 700,
-                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    PENDING
-                  </span>{' '}
-                  admin approval. Once approved, you can log in to access your separate personal sheet.
-                </Typography>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={() => {
-                    setRegistrationSuccess(false);
-                    setTabIndex(0);
-                    setError('');
-                  }}
-                  sx={{
-                    py: 1.2,
-                    borderRadius: 2,
+          {/* Navigation Tabs (Login / Register) */}
+          <Tabs
+            value={tabIndex}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{
+              mb: 3,
+              minHeight: 42,
+              borderRadius: 2,
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'rgba(255, 255, 255, 0.04)'
+                  : 'rgba(0, 0, 0, 0.04)',
+              p: 0.5,
+              '& .MuiTabs-indicator': {
+                height: '100%',
+                borderRadius: 1.5,
+                backgroundColor: theme.palette.primary.main,
+                zIndex: 0,
+                opacity: 0.15,
+              },
+            }}
+          >
+            <Tab
+              icon={<LoginIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="Sign In"
+              sx={{
+                minHeight: 38,
+                fontWeight: tabIndex === 0 ? 800 : 600,
+                fontSize: '0.88rem',
+                textTransform: 'none',
+                zIndex: 1,
+                color:
+                  tabIndex === 0
+                    ? theme.palette.primary.main
+                    : theme.palette.text.secondary,
+              }}
+            />
+            <Tab
+              icon={<PersonAddIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="Register"
+              sx={{
+                minHeight: 38,
+                fontWeight: tabIndex === 1 ? 800 : 600,
+                fontSize: '0.88rem',
+                textTransform: 'none',
+                zIndex: 1,
+                color:
+                  tabIndex === 1
+                    ? theme.palette.primary.main
+                    : theme.palette.text.secondary,
+              }}
+            />
+          </Tabs>
+
+          {/* Registration Success Confirmation Card */}
+          {registrationSuccess ? (
+            <Box textAlign="center" py={2}>
+              <CheckCircleOutlineIcon
+                sx={{ fontSize: 56, color: theme.palette.success.main, mb: 1.5 }}
+              />
+              <Typography variant="h6" fontWeight="800" sx={{ mb: 1 }}>
+                Registration Submitted!
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Your account for <strong>@{username}</strong> is currently{' '}
+                <span
+                  style={{
+                    color: '#f59e0b',
                     fontWeight: 700,
-                    textTransform: 'none',
+                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
                   }}
                 >
-                  Return to Sign In
-                </Button>
-              </Box>
-            ) : (
-              <>
-                {/* Alert Messages */}
-                {error && (
-                  <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-                    {error}
-                  </Alert>
-                )}
-                {infoMessage && (
-                  <Alert
-                    severity="warning"
-                    icon={<HowToRegIcon fontSize="inherit" sx={{ mt: 0.2 }} />}
+                  PENDING
+                </span>{' '}
+                admin approval. Once approved, you can log in to access your separate personal sheet.
+              </Typography>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={() => {
+                  setRegistrationSuccess(false);
+                  setTabIndex(0);
+                  setError('');
+                }}
+                sx={{
+                  py: 1.2,
+                  borderRadius: 2,
+                  fontWeight: 700,
+                  textTransform: 'none',
+                }}
+              >
+                Return to Sign In
+              </Button>
+            </Box>
+          ) : (
+            <>
+              {/* Alert Messages */}
+              {error && (
+                <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              {infoMessage && (
+                <Alert
+                  severity="warning"
+                  icon={<HowToRegIcon fontSize="inherit" sx={{ mt: 0.2 }} />}
+                  sx={{
+                    mb: 2.5,
+                    borderRadius: 2,
+                    fontWeight: 600,
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    background: 'rgba(245, 158, 11, 0.08)',
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight="800"
+                    sx={{ mb: 0.3, color: '#f59e0b', fontSize: '0.9rem' }}
+                  >
+                    Account Pending Approval
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.84rem', lineHeight: 1.4 }}>
+                    {infoMessage}
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Form: LOGIN */}
+              {tabIndex === 0 ? (
+                <form onSubmit={handleLoginSubmit}>
+                  <TextField
+                    fullWidth
+                    label="Username"
+                    variant="outlined"
+                    size="small"
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setError('');
+                      setInfoMessage('');
+                    }}
+                    disabled={loading}
+                    sx={inputSx}
+                    autoComplete="username"
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    variant="outlined"
+                    size="small"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError('');
+                      setInfoMessage('');
+                    }}
+                    disabled={loading}
+                    sx={{ ...inputSx, mb: 1 }}
+                    autoComplete="current-password"
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                          >
+                            {showPassword ? (
+                              <VisibilityOff fontSize="small" />
+                            ) : (
+                              <Visibility fontSize="small" />
+                            )}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  <Box display="flex" justifyContent="flex-end" mb={2.5}>
+                    <Typography
+                      variant="caption"
+                      onClick={() => {
+                        setForgotOpen(true);
+                        setForgotError('');
+                        setForgotSuccess('');
+                        setForgotUsername(username || '');
+                      }}
+                      sx={{
+                        color: theme.palette.primary.main,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        '&:hover': {
+                          textDecoration: 'underline',
+                          opacity: 0.85,
+                        },
+                      }}
+                    >
+                      Forgot Password?
+                    </Typography>
+                  </Box>
+
+                  <Button
+                    fullWidth
+                    size="large"
+                    type="submit"
+                    variant="contained"
+                    disabled={loading}
                     sx={{
-                      mb: 2.5,
+                      py: 1.3,
                       borderRadius: 2,
-                      fontWeight: 600,
-                      border: '1px solid rgba(245, 158, 11, 0.4)',
-                      background: 'rgba(245, 158, 11, 0.08)',
+                      fontWeight: 'bold',
+                      textTransform: 'none',
+                      fontSize: '1rem',
+                      position: 'relative',
                     }}
                   >
-                    <Typography
-                      variant="subtitle2"
-                      fontWeight="800"
-                      sx={{ mb: 0.3, color: '#f59e0b', fontSize: '0.9rem' }}
-                    >
-                      Account Pending Approval
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: '0.84rem', lineHeight: 1.4 }}>
-                      {infoMessage}
-                    </Typography>
-                  </Alert>
-                )}
+                    {loading ? (
+                      <CircularProgress size={24} color="inherit" />
+                    ) : (
+                      'Sign In'
+                    )}
+                  </Button>
 
-                {/* Form: LOGIN */}
-                {tabIndex === 0 ? (
-                  <form onSubmit={handleLoginSubmit}>
-                    <TextField
-                      fullWidth
-                      label="Username"
-                      variant="outlined"
-                      size="small"
-                      value={username}
-                      onChange={(e) => {
-                        setUsername(e.target.value);
-                        setError('');
-                        setInfoMessage('');
-                      }}
-                      disabled={loading}
-                      sx={inputSx}
-                      autoComplete="username"
-                    />
-
-                    <TextField
-                      fullWidth
-                      label="Password"
-                      type={showPassword ? 'text' : 'password'}
-                      variant="outlined"
-                      size="small"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setError('');
-                        setInfoMessage('');
-                      }}
-                      disabled={loading}
-                      sx={{ ...inputSx, mb: 1 }}
-                      autoComplete="current-password"
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              size="small"
-                              onClick={() => setShowPassword(!showPassword)}
-                              edge="end"
-                            >
-                              {showPassword ? (
-                                <VisibilityOff fontSize="small" />
-                              ) : (
-                                <Visibility fontSize="small" />
-                              )}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-
-                    <Box display="flex" justifyContent="flex-end" mb={2.5}>
-                      <Typography
-                        variant="caption"
+                  <Box mt={2.5} textAlign="center">
+                    <Typography variant="body2" color="text.secondary">
+                      Don't have an account?{' '}
+                      <span
                         onClick={() => {
-                          setForgotOpen(true);
-                          setForgotError('');
-                          setForgotSuccess('');
-                          setForgotUsername(username || '');
+                          setTabIndex(1);
+                          setError('');
+                          setInfoMessage('');
                         }}
-                        sx={{
+                        style={{
                           color: theme.palette.primary.main,
-                          fontWeight: 600,
+                          fontWeight: 700,
                           cursor: 'pointer',
-                          userSelect: 'none',
-                          '&:hover': {
-                            textDecoration: 'underline',
-                            opacity: 0.85,
-                          },
                         }}
                       >
-                        Forgot Password?
-                      </Typography>
-                    </Box>
+                        Register now
+                      </span>
+                    </Typography>
+                  </Box>
+                </form>
+              ) : (
+                /* Form: REGISTER */
+                <form onSubmit={handleRegisterSubmit}>
+                  <TextField
+                    fullWidth
+                    label="Full Name"
+                    variant="outlined"
+                    size="small"
+                    value={fullName}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      setError('');
+                    }}
+                    disabled={loading}
+                    sx={inputSx}
+                    placeholder="e.g. Adam"
+                  />
 
-                    <Button
-                      fullWidth
-                      size="large"
-                      type="submit"
-                      variant="contained"
-                      disabled={loading}
-                      sx={{
-                        py: 1.3,
-                        borderRadius: 2,
-                        fontWeight: 'bold',
-                        textTransform: 'none',
-                        fontSize: '1rem',
-                        position: 'relative',
-                      }}
-                    >
-                      {loading ? (
-                        <CircularProgress size={24} color="inherit" />
-                      ) : (
-                        'Sign In'
-                      )}
-                    </Button>
+                  <TextField
+                    fullWidth
+                    label="Username"
+                    variant="outlined"
+                    size="small"
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value.toLowerCase().trim());
+                      setError('');
+                    }}
+                    disabled={loading}
+                    sx={inputSx}
+                    placeholder="e.g. adam"
+                    helperText="Username"
+                  />
 
-                    <Box mt={2.5} textAlign="center">
-                      <Typography variant="body2" color="text.secondary">
-                        Don't have an account?{' '}
-                        <span
-                          onClick={() => {
-                            setTabIndex(1);
-                            setError('');
-                            setInfoMessage('');
-                          }}
-                          style={{
-                            color: theme.palette.primary.main,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Register now
-                        </span>
-                      </Typography>
-                    </Box>
-                  </form>
-                ) : (
-                  /* Form: REGISTER */
-                  <form onSubmit={handleRegisterSubmit}>
-                    <TextField
-                      fullWidth
-                      label="Full Name"
-                      variant="outlined"
-                      size="small"
-                      value={fullName}
-                      onChange={(e) => {
-                        setFullName(e.target.value);
-                        setError('');
-                      }}
-                      disabled={loading}
-                      sx={inputSx}
-                      placeholder="e.g. Adam"
-                    />
+                  <TextField
+                    fullWidth
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    variant="outlined"
+                    size="small"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError('');
+                    }}
+                    disabled={loading}
+                    sx={inputSx}
+                    helperText="Minimum 6 characters"
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                          >
+                            {showPassword ? (
+                              <VisibilityOff fontSize="small" />
+                            ) : (
+                              <Visibility fontSize="small" />
+                            )}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
 
-                    <TextField
-                      fullWidth
-                      label="Username"
-                      variant="outlined"
-                      size="small"
-                      value={username}
-                      onChange={(e) => {
-                        setUsername(e.target.value.toLowerCase().trim());
-                        setError('');
-                      }}
-                      disabled={loading}
-                      sx={inputSx}
-                      placeholder="e.g. adam"
-                      helperText="Username"
-                    />
+                  <TextField
+                    fullWidth
+                    label="Confirm Password"
+                    type={showPassword ? 'text' : 'password'}
+                    variant="outlined"
+                    size="small"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setError('');
+                    }}
+                    disabled={loading}
+                    sx={{ ...inputSx, mb: 3 }}
+                  />
 
-                    <TextField
-                      fullWidth
-                      label="Password"
-                      type={showPassword ? 'text' : 'password'}
-                      variant="outlined"
-                      size="small"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setError('');
-                      }}
-                      disabled={loading}
-                      sx={inputSx}
-                      helperText="Minimum 6 characters"
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              size="small"
-                              onClick={() => setShowPassword(!showPassword)}
-                              edge="end"
-                            >
-                              {showPassword ? (
-                                <VisibilityOff fontSize="small" />
-                              ) : (
-                                <Visibility fontSize="small" />
-                              )}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
+                  <Alert severity="info" sx={{ mb: 2.5, borderRadius: 2, fontSize: '0.8rem' }}>
+                    New accounts require admin review & approval before first login.
+                  </Alert>
 
-                    <TextField
-                      fullWidth
-                      label="Confirm Password"
-                      type={showPassword ? 'text' : 'password'}
-                      variant="outlined"
-                      size="small"
-                      value={confirmPassword}
-                      onChange={(e) => {
-                        setConfirmPassword(e.target.value);
-                        setError('');
-                      }}
-                      disabled={loading}
-                      sx={{ ...inputSx, mb: 3 }}
-                    />
+                  <Button
+                    fullWidth
+                    size="large"
+                    type="submit"
+                    variant="contained"
+                    disabled={loading}
+                    sx={{
+                      py: 1.3,
+                      borderRadius: 2,
+                      fontWeight: 'bold',
+                      textTransform: 'none',
+                      fontSize: '1rem',
+                    }}
+                  >
+                    {loading ? (
+                      <CircularProgress size={24} color="inherit" />
+                    ) : (
+                      'Request Account'
+                    )}
+                  </Button>
 
-                    <Alert severity="info" sx={{ mb: 2.5, borderRadius: 2, fontSize: '0.8rem' }}>
-                      New accounts require admin review & approval before first login.
-                    </Alert>
-
-                    <Button
-                      fullWidth
-                      size="large"
-                      type="submit"
-                      variant="contained"
-                      disabled={loading}
-                      sx={{
-                        py: 1.3,
-                        borderRadius: 2,
-                        fontWeight: 'bold',
-                        textTransform: 'none',
-                        fontSize: '1rem',
-                      }}
-                    >
-                      {loading ? (
-                        <CircularProgress size={24} color="inherit" />
-                      ) : (
-                        'Request Account'
-                      )}
-                    </Button>
-
-                    <Box mt={2.5} textAlign="center">
-                      <Typography variant="body2" color="text.secondary">
-                        Already have an account?{' '}
-                        <span
-                          onClick={() => {
-                            setTabIndex(0);
-                            setError('');
-                            setInfoMessage('');
-                          }}
-                          style={{
-                            color: theme.palette.primary.main,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Sign In
-                        </span>
-                      </Typography>
-                    </Box>
-                  </form>
-                )}
-              </>
-            )}
-          </Paper>
-        </Container>
-      </Fade>
+                  <Box mt={2.5} textAlign="center">
+                    <Typography variant="body2" color="text.secondary">
+                      Already have an account?{' '}
+                      <span
+                        onClick={() => {
+                          setTabIndex(0);
+                          setError('');
+                          setInfoMessage('');
+                        }}
+                        style={{
+                          color: theme.palette.primary.main,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Sign In
+                      </span>
+                    </Typography>
+                  </Box>
+                </form>
+              )}
+            </>
+          )}
+        </Paper>
+      </LoginScene>
 
       {/* Forgot Password Dialog */}
       <Dialog
