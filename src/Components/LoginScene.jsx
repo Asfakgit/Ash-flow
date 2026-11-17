@@ -22,9 +22,7 @@ import avatar from '../assets/login-avatar.png';
 /* Timeline (seconds)                                                  */
 /* ------------------------------------------------------------------ */
 const T = 7.8;
-const STEP = 0.44; // one full walk cycle
-const HALF_STEPS = 7;
-const WALK_END = (STEP / 2) * HALF_STEPS; // 1.54
+const WALK_END = 1.54; // walk-in ends (step count per variant, see VARIANTS)
 const CROUCH = WALK_END + 0.32; // box touches the ground
 const STAND = CROUCH + 0.26;
 const LID_OPEN = 2.08;
@@ -56,10 +54,17 @@ const TYPE_END = 7.35;
 const IDLE = 7.65;
 const FADE_IN = 0.18;
 
+/*
+ * halfSteps: steps taken during the walk-in.
+ * enterFrom (narrow only): px from the centre to the screen edge he walks in
+ * from (half of a ~400px phone). His stride is shortened to fit that distance,
+ * so the whole walk is on screen, as on desktop, instead of mostly off it.
+ */
 const VARIANTS = {
-  side: { media: '(min-width: 860px)', height: 334, hop: 48, slide: 70 },
-  top: { media: '(max-width: 859.98px)', height: 210, hop: 30, slide: 26 },
+  side: { media: '(min-width: 860px)', height: 334, hop: 48, slide: 70, halfSteps: 7 },
+  top: { media: '(max-width: 859.98px)', height: 210, hop: 30, slide: 26, halfSteps: 5, enterFrom: 200 },
 };
+const WALK_LEAD = 106; // SVG units from his left edge to the front of the carried box
 
 /* ------------------------------------------------------------------ */
 /* Skeletons (SVG user units, viewBox 0 0 140 230, ground at y = 226)  */
@@ -195,19 +200,21 @@ const deg = (r) => (r * 180) / Math.PI;
 const r2 = (n) => Math.round(n * 100) / 100;
 const legExt = (t, s) => THIGH * Math.cos(rad(t)) + SHIN * Math.cos(rad(t + s));
 
-const walkPose = (phi) => {
+// amp < 1 shortens the stride (narrow screens); the knees lift a little less too.
+const walkPose = (phi, amp = 1) => {
   const a = 2 * Math.PI * phi;
   const s = Math.sin(a);
   const c = Math.cos(a);
-  const lFt = -24 * s;
-  const lBt = 24 * s;
-  const lFs = 6 + 34 * Math.max(0, c);
-  const lBs = 6 + 34 * Math.max(0, -c);
+  const lift = 34 * ((1 + amp) / 2);
+  const lFt = -24 * amp * s;
+  const lBt = 24 * amp * s;
+  const lFs = 6 + lift * Math.max(0, c);
+  const lBs = 6 + lift * Math.max(0, -c);
   // Keep the lowest foot planted on the ground.
   const y = THIGH + SHIN - Math.max(legExt(lFt, lFs), legExt(lBt, lBs));
   return P({
     root: [0, y, 0], body: 5, head: -3,
-    aFu: -5 + 3 * s, aFl: -4, aBu: -24 * s, aBl: -18,
+    aFu: -5 + 3 * s, aFl: -4, aBu: -24 * amp * s, aBl: -18,
     lFt, lFs, lFf: -(lFt + lFs) * 0.8,
     lBt, lBs, lBf: -(lBt + lBs) * 0.8,
   });
@@ -235,6 +242,22 @@ const profileAnkle = (pose, side) => {
   let p = rotAbout(ANKLE, KNEE, pose[`l${side}s`]);
   p = rotAbout(p, HIP, pose[`l${side}t`]);
   return applyRoot(p, pose.root);
+};
+// Distance covered per half step (heel strike to heel strike).
+const strideAt = (amp) => {
+  const p = walkPose(0.25, amp);
+  return profileAnkle(p, 'F')[0] - profileAnkle(p, 'B')[0];
+};
+// The stride amplitude that covers `dist` per half step (stride grows with amp).
+const ampFor = (dist) => {
+  let lo = 0.1;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (strideAt(mid) < dist) lo = mid;
+    else hi = mid;
+  }
+  return Math.min(1, (lo + hi) / 2);
 };
 const frontRightElbow = (pose) => {
   let p = rotAbout(F_EL_R, F_SH_R, pose.fRu);
@@ -379,9 +402,10 @@ function buildVariantCss(key) {
   const stopX = -profileHand(POSES.crouch)[0] * s;
 
   // Walk distance that matches the stride, so the feet don't skate.
-  const strike = walkPose(0.25);
-  const stride = profileAnkle(strike, 'F')[0] - profileAnkle(strike, 'B')[0];
-  const startX = stopX - stride * HALF_STEPS * s;
+  const steps = v.halfSteps;
+  const cycle = (2 * WALK_END) / steps; // one full walk cycle
+  const amp = v.enterFrom ? ampFor((stopX + v.enterFrom + WALK_LEAD * s) / (steps * s)) : 1;
+  const startX = stopX - strideAt(amp) * steps * s;
 
   // Final spot: wide → right elbow on the card's left edge; narrow → centred behind the card.
   const leftAt = (x) => `calc(50% + ${px(x)})`;
@@ -393,10 +417,10 @@ function buildVariantCss(key) {
 
   /* ---- profile rig ---- */
   const frames = [];
-  const samples = HALF_STEPS * 4;
+  const samples = steps * 4;
   for (let i = 0; i <= samples; i++) {
     const t = (WALK_END * i) / samples;
-    frames.push({ t, pose: walkPose(t / STEP), ease: i === samples ? 'ease-in-out' : 'linear' });
+    frames.push({ t, pose: walkPose(t / cycle, amp), ease: i === samples ? 'ease-in-out' : 'linear' });
   }
   frames.push({ t: CROUCH, pose: POSES.crouch, ease: 'linear' });
   frames.push({ t: CROUCH + 0.06, pose: POSES.crouch, ease: 'ease-in-out' });
@@ -468,7 +492,7 @@ function buildVariantCss(key) {
   const caseStops = [];
   for (let i = 0; i <= samples; i++) {
     const t = (WALK_END * i) / samples;
-    const [hx, hy] = profileHand(walkPose(t / STEP));
+    const [hx, hy] = profileHand(walkPose(t / cycle, amp));
     const lift = (hy - 4 + CASE_H - GROUND) * s;
     caseStops.push({
       t,
