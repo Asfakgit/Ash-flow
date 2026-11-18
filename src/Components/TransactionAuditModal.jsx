@@ -474,6 +474,8 @@ function TransactionAuditModal({ open, onClose, transaction, onEdit }) {
                   return (
                     <Box
                       key={audit.auditId || idx}
+                      className="af-row"
+                      style={{ animationDelay: `${Math.min(idx, 8) * 70}ms` }}
                       sx={{
                         position: "relative",
                         mb: idx === audits.length - 1 ? 0 : 2,

@@ -26,7 +26,6 @@ import {
   Avatar,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import AssessmentIcon from "@mui/icons-material/Assessment";
 import ArrowCircleUpIcon from "@mui/icons-material/ArrowCircleUp";
 import ArrowCircleDownIcon from "@mui/icons-material/ArrowCircleDown";
 import PersonIcon from "@mui/icons-material/Person";
@@ -52,6 +51,7 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import soundEffects from "../Services/soundEffects";
 import { getDataRows, getRowVal, adminGetUsers, adminGetPremiumAudits } from "../Services/SheetService";
+import { GrowthBarsIcon, CountUp, CardCoins, ReportsScene } from "./FinanceAnimations";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -802,7 +802,7 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
             {isAdmin ? (
               <PeopleAltIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
             ) : (
-              <AssessmentIcon sx={{ fontSize: { xs: 17, sm: 22 } }} />
+              <GrowthBarsIcon sx={{ fontSize: { xs: 17, sm: 22 } }} />
             )}
           </Box>
           <Box>
@@ -1995,6 +1995,13 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
             pb: 3,
           }}
         >
+          {/* Animated data scene: your real lent/borrowed split as a donut + a growing chart */}
+          {open && (
+            <Box sx={{ px: { xs: 0.5, sm: 0 }, pt: { xs: 0.5, sm: 0 } }}>
+              <ReportsScene lentShare={lentShare} borrowedShare={borrowedShare} />
+            </Box>
+          )}
+
           {/* TOP HERO STATS: 2-COLUMN MINIMIZED CARDS ON MOBILE (NO NET AMOUNT) */}
           <Grid container spacing={{ xs: 1, sm: 2 }}>
             {/* LENT HERO CARD */}
@@ -2010,6 +2017,7 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                   backdropFilter: "blur(14px)",
                   position: "relative",
                   overflow: "hidden",
+                  isolation: "isolate",
                   transition: "transform 0.2s ease, box-shadow 0.2s ease",
                   "&:hover": {
                     boxShadow: "0 6px 20px rgba(16, 185, 129, 0.15)",
@@ -2084,8 +2092,12 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  ₹{summary.currentLent.toLocaleString("en-IN")}
+                  ₹<CountUp value={summary.currentLent} play={Boolean(open)} />
                 </Typography>
+                {/* Money going out: coins drift up and away */}
+                {summary.currentLent > 0 && (
+                  <CardCoins direction="up" active={Boolean(open)} />
+                )}
 
                 <Box
                   display="flex"
@@ -2133,6 +2145,7 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                   backdropFilter: "blur(14px)",
                   position: "relative",
                   overflow: "hidden",
+                  isolation: "isolate",
                   transition: "transform 0.2s ease, box-shadow 0.2s ease",
                   "&:hover": {
                     boxShadow: "0 6px 20px rgba(239, 68, 68, 0.15)",
@@ -2221,8 +2234,12 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  ₹{summary.currentBorrowed.toLocaleString("en-IN")}
+                  ₹<CountUp value={summary.currentBorrowed} play={Boolean(open)} />
                 </Typography>
+                {/* Money coming in: coins drop into the card */}
+                {summary.currentBorrowed > 0 && (
+                  <CardCoins direction="down" active={Boolean(open)} />
+                )}
 
                 <Box
                   display="flex"
@@ -2321,6 +2338,7 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
               }}
             >
               <Box
+                className={open ? "af-grow-x" : undefined}
                 sx={{
                   width: `${lentShare}%`,
                   bgcolor: "#10b981",
@@ -2329,6 +2347,8 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                 }}
               />
               <Box
+                className={open ? "af-grow-x" : undefined}
+                style={{ animationDelay: "0.6s" }}
                 sx={{
                   width: `${borrowedShare}%`,
                   bgcolor: "#ef4444",
@@ -3020,6 +3040,8 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                       >
                         {/* Lent Bar */}
                         <Box
+                          className={open ? "af-grow-y" : undefined}
+                          style={{ animationDelay: `${0.2 + i * 0.05}s` }}
                           sx={{
                             width: { xs: 7, sm: 20 },
                             height: `${lentHeight}%`,
@@ -3036,6 +3058,8 @@ function ReportsModal({ open, onClose, transactions = [], currentUser }) {
                         />
                         {/* Borrowed Bar */}
                         <Box
+                          className={open ? "af-grow-y" : undefined}
+                          style={{ animationDelay: `${0.26 + i * 0.05}s` }}
                           sx={{
                             width: { xs: 7, sm: 20 },
                             height: `${borrowedHeight}%`,

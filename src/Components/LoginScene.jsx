@@ -9,13 +9,17 @@ import avatar from '../assets/login-avatar.png';
  *   2. The login card springs out of the box and settles exactly in the centre.
  *   3. He hops back, turns to face the viewer, takes sunglasses out of his
  *      jacket and puts them on.
- *   4. He leans on the card — it slides away, he stumbles, recovers, and the
- *      card glides back to the centre.
- *   5. He mimes typing; afterwards he types along whenever the user types.
+ *   4. Wide screens: he leans on the card — it slides away, he stumbles,
+ *      recovers, the card glides back, and he steps back and leans on it again.
+ *      That relaxed lean is his final pose.
+ *      Narrow screens (no room beside the card): he watches from behind the
+ *      card's top edge, then jumps up and lands sitting upright on that edge,
+ *      near the card's right corner, legs hanging over the card's front, clear
+ *      of every field and button, and waves.
+ *   5. He mimes typing; afterwards he types along whenever the user types
+ *      (one-handed while leaning, on his lap while sitting).
  *
- * Wide screens: he stands beside the card. Narrow screens: he stands behind
- * it, looking over its top edge, so the centred card is never covered.
- * Tap / any key skips straight to the final state.
+ * No coins anywhere in this scene. Tap / any key skips straight to the final state.
  */
 
 /* ------------------------------------------------------------------ */
@@ -48,8 +52,19 @@ const RECOVER = 5.6;
 const CONFIDENT = 5.92;
 const BACK = 5.5; // card glides back to the centre
 const BACK_END = 6.05;
-const TYPE_IN = 6.2;
-const TYPE_START = 6.4;
+const STEP_BACK = 6.2; // wide: steps back to the card's edge…
+const LEAN_AGAIN = 6.5; // …and leans on it again (final pose)
+// narrow: jumps over the card's top edge and sits down inside the card
+const READY = 4.4;
+const SQUAT = 4.66;
+const LIFT = 4.8;
+const PEAK = 5.08; // clears the card's edge: from here on he is in front of it
+const SIT = 5.36;
+const SETTLE = 5.56;
+const WAVE = 5.8;
+const WAVE_END = 6.6;
+const TYPE_IN = 6.72;
+const TYPE_START = 6.9;
 const TYPE_END = 7.35;
 const IDLE = 7.65;
 const FADE_IN = 0.18;
@@ -57,13 +72,17 @@ const FADE_IN = 0.18;
 /*
  * halfSteps: steps taken during the walk-in.
  * enterFrom (narrow only): px from the centre to the screen edge he walks in
- * from (half of a ~400px phone). His stride is shortened to fit that distance,
- * so the whole walk is on screen, as on desktop, instead of mostly off it.
+ * from. His stride is shortened to fit that distance, so the whole walk is on
+ * screen, as on desktop, instead of mostly off it.
+ * Narrow screens don't slide the card (he doesn't lean on it there).
  */
 const VARIANTS = {
   side: { media: '(min-width: 860px)', height: 334, hop: 48, slide: 70, halfSteps: 7 },
-  top: { media: '(max-width: 859.98px)', height: 210, hop: 30, slide: 26, halfSteps: 5, enterFrom: 200 },
+  top: { media: '(min-width: 600px) and (max-width: 859.98px)', height: 210, hop: 30, slide: 0, halfSteps: 5, enterFrom: 200 },
+  xs: { media: '(max-width: 599.98px)', height: 176, hop: 26, slide: 0, halfSteps: 5, enterFrom: 180 },
 };
+const SEAT_INSET = 16; // px between him and the card's right border when seated (clear of the rounded corner)
+const SEAT_HEADROOM = 10; // px kept free above his head while seated on the card
 const WALK_LEAD = 106; // SVG units from his left edge to the front of the carried box
 
 /* ------------------------------------------------------------------ */
@@ -73,6 +92,9 @@ const GROUND = 226;
 const FEET = [70, GROUND];
 const NECK = [70, 52];
 const EDGE_Y = 100; // narrow screens: card's top edge sits at chest height
+const HEAD_TOP = 19; // top of his head (HEAD_Y, defined with the artwork below)
+const SEAT_LINE = 135; // seated: his seat, just above the jacket's hem, rests on the card's top edge
+const SIT_THIGH = 0.45; // seated: thighs point at the viewer, foreshortened to this fraction
 
 // profile rig
 const HIP = [70, 124];
@@ -124,10 +146,14 @@ const JOINTS = {
   fRu: F_SH_R,
   fRl: F_EL_R,
   fLt: F_HIP_L,
+  fLf: F_HIP_L, // thigh foreshortening (1 = full length; < 1 = pointing at the viewer)
   fLs: F_KNEE_L,
   fRt: F_HIP_R,
+  fRf: F_HIP_R,
   fRs: F_KNEE_R,
 };
+const THIGH_F = F_KNEE_L[1] - F_HIP_L[1]; // front rig: hip → knee
+const SCALE_JOINTS = ['fLf', 'fRf'];
 const SIDE_JOINTS = Object.keys(JOINTS).filter((j) => !j.startsWith('f'));
 const FRONT_JOINTS = Object.keys(JOINTS).filter((j) => j.startsWith('f'));
 const GLASSES = ['gOn', 'gHand'];
@@ -186,8 +212,10 @@ const FP = (o) => ({
   fRl: 4,
   fRk: 1,
   fLt: 1.5,
+  fLf: 1,
   fLs: -1,
   fRt: -1.5,
+  fRf: 1,
   fRs: 1,
   gOn: 0,
   gHand: 0,
@@ -299,14 +327,14 @@ const DOWN_F = G({ fHead: 3 });
 
 const frontPoses = (key) => {
   if (key === 'side') {
-    const idle = reach(G({ fRoot: [16, 0, 0], fRu: -5, fRl: 5, fLt: 2, fRt: -2 }), 'L', [55.5, 121]);
+    // elbow on the card's edge, ankles crossed, friendly head tilt
+    const lean = G({
+      fRoot: [0, 0, 7], fBody: -1, fHead: -5,
+      fLu: 5, fLl: -6, fRu: -62, fRl: -112,
+      fLt: -3, fLs: 0, fRt: 13, fRs: 8,
+    });
     return {
-      // elbow on the card's edge, ankles crossed, friendly head tilt
-      lean: G({
-        fRoot: [0, 0, 7], fBody: -1, fHead: -5,
-        fLu: 5, fLl: -6, fRu: -62, fRl: -112,
-        fLt: -3, fLs: 0, fRt: 13, fRs: 8,
-      }),
+      lean,
       fall: G({
         fRoot: [4, 0, 22], fBody: 2, fHead: -12,
         fLu: 125, fLl: 35, fRu: -115, fRl: -25,
@@ -318,21 +346,46 @@ const frontPoses = (key) => {
         fLt: 6, fLs: -4, fRt: -10, fRs: 4,
       }),
       recover: G({ fRoot: [16, 0, -3], fHead: 2, fLu: 35, fLl: -10, fRu: -35, fRl: 10, fLt: 2, fRt: -3 }),
-      idle, // confident: hand on hip
-      typing: G({ fRoot: [16, 0, 0], fLu: 10, fLl: -58, fLk: 0.42, fRu: -10, fRl: 58, fRk: 0.42, fLt: 2, fRt: -2 }),
+      // confident: hand on hip
+      idle: reach(G({ fRoot: [16, 0, 0], fRu: -5, fRl: 5, fLt: 2, fRt: -2 }), 'L', [55.5, 121]),
+      // a step back toward the card (one foot off the ground) before leaning on it again
+      step: G({ fRoot: [8, -2, 2], fHead: -2, fLu: 12, fLl: -8, fRu: -32, fRl: -40, fLt: 9, fLs: -15, fRt: 2, fRs: 0 }),
+      // still leaning on the card; the free hand types along
+      leanType: { ...lean, fHead: -2, fLu: 10, fLl: -58, fLk: 0.42 },
     };
   }
-  // narrow screens: behind the card, forearms on its top edge like a counter
-  const counter = (root, lx, rx) => reach(reach(G({ fRoot: root }), 'L', [lx, EDGE_Y + 0.5]), 'R', [rx, EDGE_Y + 0.5]);
+  // narrow screens: jump over the card's top edge and sit upright on it, like on a bench:
+  // thighs toward the viewer, knees apart, shins hanging over the card's front, feet together
+  const seat = (o = {}) => G({ fLf: SIT_THIGH, fRf: SIT_THIGH, fLt: 16, fLs: -25, fRt: -16, fRs: 25, ...o });
+  const lap = 124; // hands resting on the thighs, by the hips
+  const handsInLap = (pose) => reach(reach(pose, 'L', [57, lap]), 'R', [83, lap]);
+  const waveA = reach(reach(seat({ fHead: -3 }), 'L', [57, lap]), 'R', [106, 100]);
   return {
-    lean: counter([0, 8, 0], 58, 82),
-    fall: G({ fRoot: [6, 26, 14], fHead: -10, fLu: 140, fLl: 25, fRu: -150, fRl: -15 }),
-    stumble: G({ fRoot: [3, 10, -4], fHead: -4, fLu: 80, fLl: -15, fRu: -80, fRl: 15 }),
-    recover: G({ fRoot: [0, 0, 2], fHead: 2, fLu: 38, fLl: -10, fRu: -38, fRl: 10 }),
-    idle: counter([0, 6, 0], 57, 83),
-    typing: counter([0, 6, 0], 62, 78),
+    ready: G({ fHead: 3 }),
+    squat: G({ fRoot: [0, 10, 0], fHead: 4, fLu: 25, fLl: 10, fRu: -25, fRl: -10, fLt: 18, fLs: -30, fRt: -18, fRs: 30 }),
+    lift: G({ fRoot: [0, -4, 0], fHead: -4, fLu: 165, fLl: 5, fRu: -165, fRl: -5, fLt: -2, fRt: 2 }),
+    tuck: G({ fRoot: [0, 30, 0], fHead: -6, fLu: 140, fLl: 20, fRu: -140, fRl: -20, fLt: 35, fLs: -75, fRt: -35, fRs: 75 }),
+    land: handsInLap(seat({ fRoot: [0, 3, 0], fHead: 6, fLs: -32, fRs: 32 })),
+    sit: handsInLap(seat()),
+    waveA,
+    waveB: { ...waveA, fRl: waveA.fRl + 26 },
+    // typing on his lap
+    typing: seat({ fHead: 3, fLu: 10, fLl: -58, fLk: 0.42, fRu: -10, fRl: 58, fRk: 0.42 }),
   };
 };
+
+// Knees and soles of the front rig (character space): used to size the jump and the seat.
+const frontLegPoints = (pose) =>
+  ['L', 'R'].flatMap((side) => {
+    const hip = side === 'L' ? F_HIP_L : F_HIP_R;
+    const knee = side === 'L' ? F_KNEE_L : F_KNEE_R;
+    const sole = [knee[0] + (side === 'L' ? -1.2 : 1.2), GROUND];
+    const dy = -(1 - pose[`f${side}f`]) * THIGH_F; // a foreshortened thigh lifts the knee
+    const shin = rotAbout(sole, knee, pose[`f${side}s`]);
+    const k = rotAbout([knee[0], knee[1] + dy], hip, pose[`f${side}t`]);
+    const f = rotAbout([shin[0], shin[1] + dy], hip, pose[`f${side}t`]);
+    return [applyRoot(k, pose.fRoot), applyRoot(f, pose.fRoot)];
+  });
 
 /* ------------------------------------------------------------------ */
 /* CSS generation                                                      */
@@ -352,6 +405,12 @@ const jointCss = (name, pose) => {
   if (name === 'fLl' || name === 'fRl') {
     return `transform:rotate(${r2(v)}deg) scaleY(${r2(pose[name === 'fLl' ? 'fLk' : 'fRk'])})`;
   }
+  if (SCALE_JOINTS.includes(name)) return `transform:scaleY(${r2(v)})`;
+  if (name === 'fLs' || name === 'fRs') {
+    // the shin hangs from the knee at the end of the (possibly foreshortened) thigh
+    const k = pose[name === 'fLs' ? 'fLf' : 'fRf'];
+    return `transform:translateY(${r2(-(1 - k) * THIGH_F)}px) rotate(${r2(v)}deg)`;
+  }
   return `transform:rotate(${r2(v)}deg)`;
 };
 
@@ -365,7 +424,7 @@ const unwrap = (prev, v) => {
   while (a - prev < -180) a += 360;
   return a;
 };
-const ANGLE_KEYS = [...SIDE_JOINTS, ...FRONT_JOINTS].filter((j) => j !== 'root' && j !== 'fRoot');
+const ANGLE_KEYS = [...SIDE_JOINTS, ...FRONT_JOINTS].filter((j) => j !== 'root' && j !== 'fRoot' && !SCALE_JOINTS.includes(j));
 const unwrapTo = (ref, pose) => {
   const out = { ...pose };
   for (const k of ANGLE_KEYS) if (k in out && ref && k in ref) out[k] = unwrap(ref[k], out[k]);
@@ -393,9 +452,9 @@ const channelKeyframes = (key, channels, frames) => {
 
 function buildVariantCss(key) {
   const v = VARIANTS[key];
+  const wide = key === 'side';
   const s = v.height / 230; // px per SVG unit
   const px = (n) => `${r2(n)}px`;
-  const k = s * 0.92; // coin travel
   const fp = frontPoses(key);
 
   // Where to stop so the box lands exactly at the card's horizontal centre.
@@ -407,13 +466,14 @@ function buildVariantCss(key) {
   const amp = v.enterFrom ? ampFor((stopX + v.enterFrom + WALK_LEAD * s) / (steps * s)) : 1;
   const startX = stopX - strideAt(amp) * steps * s;
 
-  // Final spot: wide → right elbow on the card's left edge; narrow → centred behind the card.
+  // Spot after the hop: wide → right elbow on the card's left edge; narrow → centred behind the card.
   const leftAt = (x) => `calc(50% + ${px(x)})`;
-  const finalLeft = key === 'side' ? px(-(frontRightElbow(fp.lean)[0] + 5.5) * s + 2) : leftAt(-70 * s);
+  const finalLeft = wide ? px(-(frontRightElbow(fp.lean)[0] + 5.5) * s + 2) : leftAt(-70 * s);
 
-  // Ground line: wide → card's bottom edge; narrow → inside the card, so he ends up behind it.
+  // Ground line: wide → card's bottom edge; narrow → inside the card, so he starts out behind it.
   const groundY = (GROUND - EDGE_Y) * s; // narrow: distance below the card's top edge
-  const groundBottom = (lift) => (key === 'side' ? px(lift) : `calc(100% - ${px(groundY - lift)})`);
+  const groundBottom = (lift) => (wide ? px(lift) : `calc(100% - ${px(groundY - lift)})`);
+  const charBottom = groundBottom(-(230 - GROUND) * s);
 
   /* ---- profile rig ---- */
   const frames = [];
@@ -431,7 +491,7 @@ function buildVariantCss(key) {
   let css = channelKeyframes(key, SIDE_JOINTS, frames);
 
   /* ---- front rig ---- */
-  const fFrames = unwrapFrames([
+  const intro = [
     { t: 0, pose: LAND_F, ease: 'linear' },
     { t: SWAP, pose: LAND_F, ease: 'ease-out' },
     { t: RISE, pose: STAND_F, ease: 'ease-in-out' },
@@ -440,53 +500,123 @@ function buildVariantCss(key) {
     { t: G_FACE, pose: FACE_F, ease: 'linear' },
     { t: G_ON, pose: ON_F, ease: 'ease-in-out' },
     { t: G_DOWN, pose: DOWN_F, ease: 'ease-in-out' },
-    { t: LEAN, pose: fp.lean, ease: 'linear' },
-    { t: LEAN_HOLD, pose: fp.lean, ease: 'ease-in' },
-    { t: FALL, pose: fp.fall, ease: 'ease-out' },
-    { t: STUMBLE, pose: fp.stumble, ease: 'ease-in-out' },
-    { t: RECOVER, pose: fp.recover, ease: 'ease-in-out' },
-    { t: CONFIDENT, pose: fp.idle, ease: 'linear' },
-    { t: TYPE_IN, pose: fp.idle, ease: 'ease-in-out' },
-    { t: TYPE_START, pose: fp.typing, ease: 'linear' },
-    { t: TYPE_END, pose: fp.typing, ease: 'ease-in-out' },
-    { t: IDLE, pose: fp.idle },
-  ]);
+  ];
+  const tail = wide
+    ? [
+        // leans on the card; it slides away; he stumbles and recovers…
+        { t: LEAN, pose: fp.lean, ease: 'linear' },
+        { t: LEAN_HOLD, pose: fp.lean, ease: 'ease-in' },
+        { t: FALL, pose: fp.fall, ease: 'ease-out' },
+        { t: STUMBLE, pose: fp.stumble, ease: 'ease-in-out' },
+        { t: RECOVER, pose: fp.recover, ease: 'ease-in-out' },
+        { t: CONFIDENT, pose: fp.idle, ease: 'ease-in-out' },
+        // …then steps back to the returned card and leans on it again, for good
+        { t: STEP_BACK, pose: fp.step, ease: 'ease-in-out' },
+        { t: LEAN_AGAIN, pose: fp.lean, ease: 'linear' },
+        { t: TYPE_IN, pose: fp.lean, ease: 'ease-in-out' },
+        { t: TYPE_START, pose: fp.leanType, ease: 'linear' },
+        { t: TYPE_END, pose: fp.leanType, ease: 'ease-in-out' },
+        { t: IDLE, pose: fp.lean },
+      ]
+    : [
+        // squat, spring up over the card's edge, land sitting in its corner, wave
+        { t: READY, pose: fp.ready, ease: 'ease-in-out' },
+        { t: SQUAT, pose: fp.squat, ease: 'ease-out' },
+        { t: LIFT, pose: fp.lift, ease: 'ease-out' },
+        { t: PEAK, pose: fp.tuck, ease: 'ease-in' },
+        { t: SIT, pose: fp.land, ease: 'ease-out' },
+        { t: SETTLE, pose: fp.sit, ease: 'ease-in-out' },
+        { t: WAVE, pose: fp.waveA, ease: 'ease-in-out' },
+        { t: WAVE + 0.15, pose: fp.waveB, ease: 'ease-in-out' },
+        { t: WAVE + 0.3, pose: fp.waveA, ease: 'ease-in-out' },
+        { t: WAVE + 0.45, pose: fp.waveB, ease: 'ease-in-out' },
+        { t: WAVE + 0.6, pose: fp.waveA, ease: 'ease-in-out' },
+        { t: WAVE_END, pose: fp.sit, ease: 'linear' },
+        { t: TYPE_IN, pose: fp.sit, ease: 'ease-in-out' },
+        { t: TYPE_START, pose: fp.typing, ease: 'linear' },
+        { t: TYPE_END, pose: fp.typing, ease: 'ease-in-out' },
+        { t: IDLE, pose: fp.sit },
+      ];
+  const fFrames = unwrapFrames([...intro, ...tail]);
   css += channelKeyframes(key, [...FRONT_JOINTS, ...GLASSES], fFrames);
 
   // After the intro, typing in the form makes him type too (CSS transitions, see .lc-done).
   const idleFinal = fFrames[fFrames.length - 1].pose;
-  const typingPose = unwrapTo(idleFinal, fp.typing);
+  const typingPose = unwrapTo(idleFinal, wide ? fp.leanType : fp.typing);
   css += FRONT_JOINTS.map((j) => `.lc-done.lc-typing .lc-j-${j}{${jointCss(j, typingPose)}}`).join('');
+  // leaning on the card: only his free (left) hand types
+  if (wide) css += '.lc-tapR,.lc-done.lc-typing .lc-tapR{animation:none}';
 
   /* ---- character position, hop, shadow ---- */
   const walkX = (t) => startX + (stopX - startX) * Math.min(1, t / WALK_END);
-  css += keyframes(`lc-${key}-char`, [
+  const charStops = [
     { t: 0, css: `left:${leftAt(startX)};opacity:0`, ease: 'linear' },
     { t: FADE_IN, css: `left:${leftAt(walkX(FADE_IN))};opacity:1`, ease: 'linear' },
     { t: WALK_END, css: `left:${leftAt(stopX)};opacity:1`, ease: 'linear' },
     { t: TAKEOFF, css: `left:${leftAt(stopX)};opacity:1`, ease: 'linear' },
     { t: LAND, css: `left:${finalLeft};opacity:1` },
-  ]);
-  css += keyframes(`lc-${key}-hop`, [
+  ];
+  const hopStops = [
     { t: 0, css: 'transform:translateY(0)', ease: 'linear' },
     { t: TAKEOFF, css: 'transform:translateY(0)', ease: 'cubic-bezier(.2,.7,.4,1)' },
     { t: APEX, css: `transform:translateY(${px(-v.hop * s)})`, ease: 'cubic-bezier(.6,0,.8,.3)' },
     { t: LAND, css: 'transform:translateY(0)' },
-  ]);
-  const stepX = key === 'side' ? px(16 * s) : '0px';
-  css += keyframes(`lc-${key}-shadow`, [
+  ];
+  const shadowStops = [
     { t: 0, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'linear' },
     { t: TAKEOFF, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'ease-out' },
     { t: APEX, css: 'transform:translateX(0) scale(.5);opacity:.45', ease: 'ease-in' },
     { t: LAND, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'linear' },
-    { t: FALL, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'ease-in-out' },
-    { t: STUMBLE, css: `transform:translateX(${stepX}) scale(1);opacity:1` },
-  ]);
+  ];
+  let shadowEnd;
+  if (wide) {
+    // follows his feet: a step forward as he stumbles, a step back as he leans again
+    const stepX = px(16 * s);
+    shadowStops.push(
+      { t: FALL, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'ease-in-out' },
+      { t: STUMBLE, css: `transform:translateX(${stepX}) scale(1);opacity:1`, ease: 'linear' },
+      { t: CONFIDENT, css: `transform:translateX(${stepX}) scale(1);opacity:1`, ease: 'ease-in-out' },
+      { t: LEAN_AGAIN, css: 'transform:translateX(0) scale(1);opacity:1' },
+    );
+    shadowEnd = 'transform:translateX(0) scale(1);opacity:1';
+  } else {
+    // The seat: upright on the card's top edge, SEAT_INSET in from its right border
+    // (measured from his right elbow), legs hanging over the card's front.
+    const seatRight = frontRightElbow(fp.sit)[0] + 7;
+    const seatLeft = `calc(100% - ${px(seatRight * s + SEAT_INSET)})`;
+    const seatBottom = `calc(100% - ${px((230 - SEAT_LINE) * s)})`;
+    // Seated, he sticks out above the card: reserve that space so he is never clipped.
+    const headroom = (SEAT_LINE - HEAD_TOP) * s + SEAT_HEADROOM;
+    css += `.lc-stage{margin-top:${px(headroom)}}`;
+    // A jump just high enough for his tucked feet to clear the card's top edge at PEAK.
+    const lowest = Math.max(...frontLegPoints(fp.tuck).map((pt) => pt[1])) + 6;
+    const jump = groundY + (lowest - GROUND) * s + 8;
+    charStops.push(
+      { t: LIFT, css: `left:${finalLeft};bottom:${charBottom};opacity:1`, ease: 'linear' },
+      { t: PEAK, css: `bottom:${charBottom}`, ease: 'linear' },
+      { t: SIT, css: `left:${seatLeft};bottom:${seatBottom};opacity:1` },
+      { t: T, css: `left:${seatLeft};bottom:${seatBottom};opacity:1` },
+    );
+    hopStops.push(
+      { t: LIFT, css: 'transform:translateY(0)', ease: 'cubic-bezier(.25,.7,.45,1)' },
+      { t: PEAK, css: `transform:translateY(${px(-jump)})`, ease: 'cubic-bezier(.55,0,.75,.35)' },
+      { t: SIT, css: 'transform:translateY(0)' },
+    );
+    // no floor under his dangling feet: the shadow stays gone once he jumps
+    shadowEnd = 'transform:translateX(0) scale(.6);opacity:0';
+    shadowStops.push(
+      { t: LIFT, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'ease-out' },
+      { t: LIFT + 0.1, css: shadowEnd },
+    );
+  }
+  shadowStops.push({ t: T, css: shadowEnd });
+  css += keyframes(`lc-${key}-char`, charStops);
+  css += keyframes(`lc-${key}-hop`, hopStops);
+  css += keyframes(`lc-${key}-shadow`, shadowStops);
 
-  const charBottom = groundBottom(-(230 - GROUND) * s);
   css += `.lc-char{width:${px(140 * s)};height:${px(230 * s)};bottom:${charBottom};left:${finalLeft};${anim(`lc-${key}-char`)}}`;
   css += `.lc-hop{${anim(`lc-${key}-hop`)}}`;
-  css += `.lc-shadow{width:${px(60 * s)};height:${px(11 * s)};left:${px(40 * s)};bottom:${px(-2 * s)};transform:translateX(${stepX});${anim(`lc-${key}-shadow`)}}`;
+  css += `.lc-shadow{width:${px(60 * s)};height:${px(11 * s)};left:${px(40 * s)};bottom:${px(-2 * s)};${shadowEnd};${anim(`lc-${key}-shadow`)}}`;
 
   /* ---- money box: carried in lock-step with the hand, then set down ---- */
   const caseStops = [];
@@ -507,33 +637,15 @@ function buildVariantCss(key) {
   css += keyframes(`lc-${key}-case`, caseStops);
   css += `.lc-case{width:${px(CASE_W * s)};height:${px(CASE_H * s)};bottom:${groundBottom(0)};${caseRest};transform:scale(.5);opacity:0;${anim(`lc-${key}-case`)}}`;
 
-  /* ---- glow + coins burst out of the box ---- */
+  /* ---- glow out of the box ---- */
   const mouth = 24 * s;
   css += `.lc-glow{bottom:${groundBottom(mouth - 110)}}`;
-  css += `.lc-coin{bottom:${groundBottom(mouth - 11)}}`;
-  const coins = [
-    [-74, 118, -220],
-    [8, 168, 170],
-    [80, 124, 240],
-  ];
-  coins.forEach(([dx, dy, rot], i) => {
-    const name = `lc-${key}-coin${i}`;
-    const d = 0.04 * i;
-    css += keyframes(name, [
-      { t: 0, css: 'transform:translate(0,8px) scale(.3) rotate(0);opacity:0', ease: 'linear' },
-      { t: LID_OPEN + 0.04 + d, css: 'transform:translate(0,8px) scale(.3) rotate(0);opacity:0', ease: 'cubic-bezier(.15,.7,.35,1)' },
-      { t: LID_OPEN + 0.42 + d, css: `transform:translate(${px(dx * k)},${px(-dy * k)}) scale(1) rotate(${rot / 2}deg);opacity:1`, ease: 'cubic-bezier(.5,0,.85,.4)' },
-      { t: LID_OPEN + 0.84 + d, css: `transform:translate(${px(dx * k * 1.35)},${px(-dy * k * 0.55)}) scale(.85) rotate(${rot}deg);opacity:0` },
-    ]);
-    css += `.lc-coin-${i}{${anim(name)}}`;
-  });
 
-  /* ---- the card: springs out of the box, settles centred, slides away and back ---- */
-  const cardFrom =
-    key === 'side'
-      ? `translateY(calc(50% - ${px(mouth)})) scale(.02)`
-      : `translateY(calc(${px(groundY - mouth)} - 50%)) scale(.02)`;
-  const cardOver = key === 'side' ? 'translateY(-1.5%) scale(1.035)' : 'translateY(1.5%) scale(1.035)';
+  /* ---- the card: springs out of the box, settles centred (wide: slides away and back) ---- */
+  const cardFrom = wide
+    ? `translateY(calc(50% - ${px(mouth)})) scale(.02)`
+    : `translateY(calc(${px(groundY - mouth)} - 50%)) scale(.02)`;
+  const cardOver = wide ? 'translateY(-1.5%) scale(1.035)' : 'translateY(1.5%) scale(1.035)';
   const slid = `translateX(${px(v.slide)})`;
   css += keyframes(`lc-${key}-card`, [
     { t: 0, css: `transform:${cardFrom};opacity:0`, ease: 'linear' },
@@ -548,17 +660,20 @@ function buildVariantCss(key) {
   ]);
   css += `.lc-card{${anim(`lc-${key}-card`)}}`;
 
-  /* ---- layering: in front of the card when beside it, behind it when over its edge ---- */
-  if (key === 'top') {
-    // The card is translucent, so also clip him at its top edge once it has grown.
+  /* ---- narrow layering: behind the card until he clears its top edge mid-jump, then in front ---- */
+  if (!wide) {
+    // The card is translucent, so while he is behind it he is also clipped at its top edge.
     const open = 'inset(-300px -300px -300px -300px)';
     const clipped = `inset(-300px -300px ${px((230 - EDGE_Y) * s)} -300px)`;
     css += keyframes(`lc-${key}-clip`, [
-      { t: 0, css: `clip-path:${open}`, ease: 'linear' },
-      { t: POP + 0.3, css: `clip-path:${open}`, ease: 'ease-in' },
-      { t: POP + 0.5, css: `clip-path:${clipped}` },
+      { t: 0, css: `clip-path:${open};z-index:2`, ease: 'linear' },
+      { t: POP + 0.3, css: `clip-path:${open};z-index:2`, ease: 'ease-in' },
+      { t: POP + 0.5, css: `clip-path:${clipped};z-index:2`, ease: 'linear' },
+      { t: PEAK - 0.02, css: `clip-path:${clipped};z-index:2`, ease: 'linear' },
+      { t: PEAK, css: `clip-path:${open};z-index:7`, ease: 'linear' },
+      { t: T, css: `clip-path:${open};z-index:7` },
     ]);
-    css += `.lc-char{z-index:2;clip-path:${clipped};animation:lc-${key}-char ${T}s linear both,lc-${key}-clip ${T}s linear both}`;
+    css += `.lc-char{z-index:7;clip-path:${open};animation:lc-${key}-char ${T}s linear both,lc-${key}-clip ${T}s linear both}`;
     css += '.lc-case{z-index:2}';
   }
 
@@ -588,11 +703,10 @@ function buildCss() {
 .lc-card{position:relative;z-index:3;transform-origin:50% 50%}
 .lc-char{position:absolute;z-index:5;pointer-events:none}
 .lc-hop{position:absolute;inset:0}
-.lc-hop svg,.lc-case svg,.lc-coin svg{display:block;width:100%;height:100%;overflow:visible}
+.lc-hop svg,.lc-case svg{display:block;width:100%;height:100%;overflow:visible}
 .lc-shadow{position:absolute;border-radius:50%;transform-origin:50% 50%}
 .lc-case{position:absolute;z-index:6;transform-origin:50% 100%;pointer-events:none}
 .lc-glow{position:absolute;z-index:1;left:50%;width:220px;height:220px;margin-left:-110px;border-radius:50%;pointer-events:none;opacity:0;animation:lc-glow ${T}s linear both}
-.lc-coin{position:absolute;z-index:4;left:50%;width:22px;height:22px;margin-left:-11px;pointer-events:none;opacity:0}
 .lc-j,.lc-idle{transform-box:view-box}
 .lc-lid{transform-box:view-box;transform-origin:3px 15px;transform:rotate(-34deg);animation:lc-lid ${T}s linear both}
 .lc-rig-side{opacity:0;animation:lc-rigSide ${T}s linear both}
@@ -639,7 +753,7 @@ ${keyframes('lc-tapR', taps(1))}
 .lc-skip .lc-idle{animation-delay:0s !important}
 `;
 
-  return common + buildVariantCss('side') + buildVariantCss('top') + skip;
+  return common + Object.keys(VARIANTS).map(buildVariantCss).join('') + skip;
 }
 
 const SCENE_CSS = buildCss();
@@ -880,8 +994,7 @@ const FrontLeg = ({ side, c }) => {
   const toe = kx + (side === 'L' ? -1.2 : 1.2); // feet turned slightly out
   return (
     <g className={`lc-j lc-i lc-j-f${side}t`}>
-      <path d={`M${n(hx - 8.5)} 122H${n(hx + 8.5)}L${n(kx + 6.3)} 173H${n(kx - 6.3)}Z`} fill="url(#lcPants)" />
-      <path d={`M${hx} 138L${kx} 172`} stroke={c.crease} strokeWidth="0.7" />
+      {/* shin first: the thigh overlaps its top, so a foreshortened (seated) thigh still shows the knee */}
       <g className={`lc-j lc-i lc-j-f${side}s`}>
         <path d={shoeFront(toe, 209.5, 226)} fill={c.shoe} />
         <path d={soleFront(toe, 226)} fill={c.sole} />
@@ -891,6 +1004,10 @@ const FrontLeg = ({ side, c }) => {
           fill="url(#lcPants)"
         />
         <path d={`M${kx} 172V212`} stroke={c.crease} strokeWidth="0.7" />
+      </g>
+      <g className={`lc-j lc-i lc-j-f${side}f`}>
+        <path d={`M${n(hx - 8.5)} 122H${n(hx + 8.5)}L${n(kx + 6.3)} 173H${n(kx - 6.3)}Z`} fill="url(#lcPants)" />
+        <path d={`M${hx} 138L${kx} 172`} stroke={c.crease} strokeWidth="0.7" />
       </g>
     </g>
   );
@@ -999,10 +1116,10 @@ const MoneyBox = ({ c }) => (
     <rect x="2" y="15" width="40" height="2.6" fill={c.gold} />
     <rect x="2" y="35" width="40" height="1.6" fill={c.goldDark} />
     <rect x="5" y="20" width="34" height="13.5" rx="2" fill={c.boxDark} opacity="0.35" />
-    <circle cx="22" cy="26.6" r="5.4" fill={c.gold} stroke={c.goldDark} strokeWidth="0.8" />
-    <text x="22" y="29.6" textAnchor="middle" fontSize="8" fontWeight="800" fill={c.boxDark} fontFamily="sans-serif">
-      ₹
-    </text>
+    {/* gold lock plate with a keyhole */}
+    <rect x="17" y="21.6" width="10" height="9.4" rx="1.8" fill={c.gold} stroke={c.goldDark} strokeWidth="0.8" />
+    <circle cx="22" cy="25.4" r="1.25" fill={c.boxDark} />
+    <path d="M21.45 25.8h1.1l.3 2.9h-1.7z" fill={c.boxDark} />
     {[4.5, 39.5].map((x) => (
       <circle key={x} cx={x} cy="19.5" r="0.9" fill={c.gold} />
     ))}
@@ -1012,16 +1129,6 @@ const MoneyBox = ({ c }) => (
       <rect x="2" y="14.2" width="40" height="1.4" fill={c.goldDark} />
       <rect x="19.5" y="12.5" width="5" height="5" rx="1" fill={c.gold} stroke={c.goldDark} strokeWidth="0.6" />
     </g>
-  </svg>
-);
-
-const Coin = () => (
-  <svg viewBox="0 0 22 22" aria-hidden="true" focusable="false">
-    <circle cx="11" cy="11" r="10" fill="#F7C948" stroke="#D99A1E" strokeWidth="1.5" />
-    <circle cx="11" cy="11" r="6.8" fill="none" stroke="#E8B030" strokeWidth="1" />
-    <text x="11" y="15" textAnchor="middle" fontSize="11" fontWeight="800" fill="#9C6B0A" fontFamily="sans-serif">
-      ₹
-    </text>
   </svg>
 );
 
@@ -1072,12 +1179,6 @@ const LoginScene = ({ children }) => {
       />
 
       <div className="lc-card lc-i">{children}</div>
-
-      {[0, 1, 2].map((i) => (
-        <div key={i} className={`lc-coin lc-coin-${i} lc-i`}>
-          <Coin />
-        </div>
-      ))}
 
       <div className="lc-char lc-i">
         <div

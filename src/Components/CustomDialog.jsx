@@ -11,10 +11,10 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { forwardRef, useState, useEffect } from "react";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import { SuccessBurst } from "./FinanceAnimations";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -62,46 +62,49 @@ function CustomDialog({
   const getIcon = () => {
     switch (type) {
       case "success":
+        // Payment / save confirmations: ring + tick draw in, coins burst out
         return (
-          <CheckCircleOutlineIcon
-            sx={{
-              fontSize: 72,
-              color: theme.palette.success.main,
-              mb: 1.5,
-              filter: "drop-shadow(0 0 12px rgba(16,185,129,0.4))",
-            }}
-          />
+          <Box sx={{ mb: 1.5 }}>
+            <SuccessBurst size={84} color={theme.palette.success.main} />
+          </Box>
         );
       case "confirm":
         return (
           <WarningAmberIcon
+            className="af"
             sx={{
               fontSize: 72,
               color: theme.palette.warning.main,
               mb: 1.5,
               filter: "drop-shadow(0 0 12px rgba(245,158,11,0.4))",
+              transformOrigin: "50% 85%",
+              animation: "af-swing 3.2s ease-in-out 0.35s infinite",
             }}
           />
         );
       case "error":
         return (
           <ErrorOutlineIcon
+            className="af"
             sx={{
               fontSize: 72,
               color: theme.palette.error.main,
               mb: 1.5,
               filter: "drop-shadow(0 0 12px rgba(244,63,94,0.4))",
+              animation: "af-shake 0.55s ease-in-out 0.3s backwards",
             }}
           />
         );
       default:
         return (
           <InfoOutlinedIcon
+            className="af"
             sx={{
               fontSize: 72,
               color: theme.palette.info.main,
               mb: 1.5,
               filter: "drop-shadow(0 0 12px rgba(59,130,246,0.4))",
+              animation: "af-bob 2.6s ease-in-out infinite",
             }}
           />
         );

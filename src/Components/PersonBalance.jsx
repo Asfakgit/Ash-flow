@@ -30,6 +30,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import soundEffects from "../Services/soundEffects";
 import TransactionAuditModal from "./TransactionAuditModal";
 import EditTransactionModal from "./EditTransactionModal";
+import { EmptyState, TransferFlow } from "./FinanceAnimations";
 import {
   getRowVal,
   getDataRows,
@@ -46,6 +47,7 @@ const Transition = forwardRef(function Transition(props, ref) {
 
 function PersonBalance({
   transactions = [],
+  loading = false,
   setTransactions,
   triggerRefresh,
   showNotification,
@@ -491,9 +493,14 @@ function PersonBalance({
         {onOpenAdd && (
           <Button
             variant="contained"
+            className="af-shine"
             onClick={() => onOpenAdd({ person: "", type: "Lent" })}
             startIcon={<AddIcon sx={{ fontSize: { xs: "16px !important", sm: "18px !important" } }} />}
             sx={{
+              "& .MuiButton-startIcon": {
+                transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              },
+              "&:hover .MuiButton-startIcon": { transform: "rotate(90deg)" },
               borderRadius: "16px",
               px: { xs: 1.3, sm: 2 },
               py: { xs: 0.45, sm: 0.65 },
@@ -579,18 +586,30 @@ function PersonBalance({
             {displayedEntries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: theme.palette.text.secondary }}
+                  <EmptyState
+                    variant={
+                      loading && transactions.length === 0
+                        ? "loading"
+                        : balanceFilter === "active"
+                        ? "balanced"
+                        : "empty"
+                    }
                   >
-                    {balanceFilter === "active"
-                      ? "No active balances."
-                      : "No settled or closed accounts."}
-                  </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: theme.palette.text.secondary }}
+                    >
+                      {loading && transactions.length === 0
+                        ? "Loading balances…"
+                        : balanceFilter === "active"
+                        ? "No active balances."
+                        : "No settled or closed accounts."}
+                    </Typography>
+                  </EmptyState>
                 </TableCell>
               </TableRow>
             ) : (
-              displayedEntries.map(([person, balance]) => {
+              displayedEntries.map(([person, balance], rowIdx) => {
                 const initial = person ? person.charAt(0).toUpperCase() : "?";
                 const isPositive = balance > 0;
                 const isNegative = balance < 0;
@@ -600,6 +619,8 @@ function PersonBalance({
                   <TableRow
                     key={person}
                     hover
+                    className="af-row"
+                    style={{ animationDelay: `${Math.min(rowIdx, 10) * 40}ms` }}
                     onClick={() => setSelectedPerson(person)}
                     sx={{
                       "&:last-child td, &:last-child th": { border: 0 },
@@ -851,6 +872,15 @@ function PersonBalance({
           },
         }}
       >
+        {/* Animated money flow: who gave money to whom (follows the net position) */}
+        <Box sx={{ maxWidth: 380, width: "100%", mx: "auto", pt: { xs: 1.5, sm: 2 } }}>
+          <TransferFlow
+            mode={personStats.net > 0 ? "out" : personStats.net < 0 ? "in" : "settled"}
+            tone={personStats.net > 0 ? "#10B981" : personStats.net < 0 ? "#EF4444" : "#94a3b8"}
+            personName={capitalizeName(selectedPerson || "")}
+          />
+        </Box>
+
         {/* Quick Action Payment Buttons: Lent | Borrow | Partial */}
         <Box>
           <Typography
@@ -1217,12 +1247,14 @@ function PersonBalance({
         {/* History List */}
         {filteredHistory.length === 0 ? (
           <Box py={4} textAlign="center">
-            <Typography
-              variant="body2"
-              sx={{ color: theme.palette.text.secondary }}
-            >
-              No {historyFilter !== "all" ? historyFilter : ""} transactions found.
-            </Typography>
+            <EmptyState variant="search">
+              <Typography
+                variant="body2"
+                sx={{ color: theme.palette.text.secondary }}
+              >
+                No {historyFilter !== "all" ? historyFilter : ""} transactions found.
+              </Typography>
+            </EmptyState>
           </Box>
         ) : (
           <Box display="flex" flexDirection="column" gap={0.7}>
@@ -1254,6 +1286,8 @@ function PersonBalance({
               return (
                 <Box
                   key={getRowVal(row, 0, "id", idx)}
+                  className="af-row"
+                  style={{ animationDelay: `${120 + Math.min(idx, 10) * 40}ms` }}
                   onClick={() => setSelectedTxForAudit(row)}
                   sx={{
                     py: { xs: 0.85, sm: 1.1 },

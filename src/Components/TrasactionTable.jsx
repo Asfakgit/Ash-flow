@@ -28,13 +28,14 @@ import {
 
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ManageHistoryIcon from "@mui/icons-material/ManageHistory";
 import TransactionAuditModal from "./TransactionAuditModal";
 import EditTransactionModal from "./EditTransactionModal";
+import { EmptyState, ReceiptPrintIcon } from "./FinanceAnimations";
 
 function Transactions({
   transactions,
+  loading = false,
   setTransactions,
   triggerRefresh,
   showNotification,
@@ -86,6 +87,16 @@ function Transactions({
     );
   });
 
+  // Animated empty state: loading → coins hopping, search miss → magnifier, none yet → money box
+  const isInitialLoad = loading && rows.length === 0;
+  const emptyState = (
+    <EmptyState variant={isInitialLoad ? "loading" : searchQuery.trim() ? "search" : "empty"}>
+      <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+        {isInitialLoad ? "Loading transactions…" : "No transactions found."}
+      </Typography>
+    </EmptyState>
+  );
+
   return (
     <Box>
       <Box
@@ -109,7 +120,7 @@ function Transactions({
               color: theme.palette.primary.main,
             }}
           >
-            <ReceiptLongIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+            <ReceiptPrintIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           </Box>
           <Box>
             <Typography
@@ -218,9 +229,7 @@ function Transactions({
                 {filteredRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
-                        No transactions found.
-                      </Typography>
+                      {emptyState}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -249,6 +258,8 @@ function Transactions({
                     return (
                       <TableRow
                         key={idVal || index}
+                        className="af-row"
+                        style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
                         onClick={() => setSelectedTxForAudit(row)}
                         sx={{
                           cursor: "pointer",
@@ -481,9 +492,7 @@ function Transactions({
               border: `1px solid ${theme.palette.divider}`,
             }}
           >
-            <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-              No transactions found.
-            </Typography>
+            {emptyState}
           </Paper>
         ) : (
           <Stack spacing={0.5}>
@@ -512,6 +521,8 @@ function Transactions({
                 <Paper
                   key={idVal || index}
                   elevation={0}
+                  className="af-row"
+                  style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
                   onClick={() => setSelectedTxForAudit(row)}
                   sx={{
                     px: 1.2,

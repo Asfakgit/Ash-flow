@@ -1,5 +1,5 @@
 /* global process */
-import { app, BrowserWindow, nativeImage } from "electron";
+import { app, BrowserWindow, nativeImage, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
@@ -18,6 +18,11 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+  // Links that open a new window (e.g. the admin's WhatsApp contact) go to the system browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://")) shell.openExternal(url);
+    return { action: "deny" };
   });
   mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
 }

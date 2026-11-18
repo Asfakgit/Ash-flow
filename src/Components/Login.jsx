@@ -20,13 +20,18 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import LoginIcon from '@mui/icons-material/Login';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CloseIcon from '@mui/icons-material/Close';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import logo from '../assets/logo.png';
 import LoginScene from './LoginScene';
+import { AmbientBackdrop, SuccessBurst } from './FinanceAnimations';
 import { loginUser, registerUser, requestPasswordReset } from '../Services/SheetService';
+
+// Shown to accounts that are still waiting for admin approval.
+const ADMIN_WHATSAPP = '918089974243'; // country code + number, as wa.me expects
+const ADMIN_WHATSAPP_LABEL = '+91 8089974243';
 
 const Login = ({ onLogin }) => {
   const theme = useTheme();
@@ -43,6 +48,7 @@ const Login = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
+  const [pendingApproval, setPendingApproval] = useState(false); // infoMessage is a pending-approval notice
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
   // Check for forced logout notices (e.g. membership change)
@@ -123,6 +129,7 @@ const Login = ({ onLogin }) => {
     e.preventDefault();
     setError('');
     setInfoMessage('');
+    setPendingApproval(false);
 
     if (!username.trim() || !password) {
       setError('Please enter both username and password.');
@@ -144,6 +151,7 @@ const Login = ({ onLogin }) => {
             res.message ||
               'Your account is pending admin approval. You will be able to log in once the administrator approves it.'
           );
+          setPendingApproval(true);
         } else if (res.status === 'REJECTED') {
           setError(
             res.message || 'Your account registration was rejected by the administrator.'
@@ -229,6 +237,9 @@ const Login = ({ onLogin }) => {
         overflow: 'hidden',
       }}
     >
+      {/* Ambient motion behind the card: a slow glow only (no coins or sparkles on the login screen) */}
+      <AmbientBackdrop />
+
       <LoginScene>
         <Paper
           elevation={24}
@@ -351,10 +362,10 @@ const Login = ({ onLogin }) => {
 
           {/* Registration Success Confirmation Card */}
           {registrationSuccess ? (
-            <Box textAlign="center" py={2}>
-              <CheckCircleOutlineIcon
-                sx={{ fontSize: 56, color: theme.palette.success.main, mb: 1.5 }}
-              />
+            <Box textAlign="center" py={2} className="af-swap">
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1.5 }}>
+                <SuccessBurst size={72} color={theme.palette.success.main} coins={false} />
+              </Box>
               <Typography variant="h6" fontWeight="800" sx={{ mb: 1 }}>
                 Registration Submitted!
               </Typography>
@@ -421,12 +432,42 @@ const Login = ({ onLogin }) => {
                   <Typography variant="body2" sx={{ fontSize: '0.84rem', lineHeight: 1.4 }}>
                     {infoMessage}
                   </Typography>
+                  {pendingApproval && (
+                    <Box sx={{ mt: 1.2 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontSize: '0.84rem', fontWeight: 700, mb: 0.8 }}
+                      >
+                        Contact admin on WhatsApp
+                      </Typography>
+                      <Button
+                        component="a"
+                        href={`https://wa.me/${ADMIN_WHATSAPP}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        variant="contained"
+                        startIcon={<WhatsAppIcon />}
+                        sx={{
+                          bgcolor: '#25D366',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          borderRadius: 2,
+                          boxShadow: 'none',
+                          '&:hover': { bgcolor: '#1DA851', boxShadow: 'none' },
+                        }}
+                      >
+                        {ADMIN_WHATSAPP_LABEL}
+                      </Button>
+                    </Box>
+                  )}
                 </Alert>
               )}
 
               {/* Form: LOGIN */}
               {tabIndex === 0 ? (
-                <form onSubmit={handleLoginSubmit}>
+                <form key="signin" className="af-swap" onSubmit={handleLoginSubmit}>
                   <TextField
                     fullWidth
                     label="Username"
@@ -545,7 +586,7 @@ const Login = ({ onLogin }) => {
                 </form>
               ) : (
                 /* Form: REGISTER */
-                <form onSubmit={handleRegisterSubmit}>
+                <form key="register" className="af-swap" onSubmit={handleRegisterSubmit}>
                   <TextField
                     fullWidth
                     label="Full Name"
@@ -716,7 +757,9 @@ const Login = ({ onLogin }) => {
 
         {forgotSuccess ? (
           <Box py={2} textAlign="center">
-            <CheckCircleOutlineIcon sx={{ fontSize: 54, color: 'success.main', mb: 1.5 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1.5 }}>
+              <SuccessBurst size={64} color={theme.palette.success.main} coins={false} />
+            </Box>
             <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
               Request Submitted!
             </Typography>

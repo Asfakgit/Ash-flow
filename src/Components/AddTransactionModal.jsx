@@ -33,6 +33,7 @@ import {
   isValidDate,
 } from "../Services/SheetService";
 import soundEffects from "../Services/soundEffects";
+import { TransferFlow } from "./FinanceAnimations";
 
 const Transition = forwardRef(function Transition(props, ref) {
   return (
@@ -320,6 +321,15 @@ export default function AddTransactionModal({
           gap: { xs: 2, sm: 2.5 },
         }}
       >
+        {/* Live money-flow preview: follows the selected type and the typed name */}
+        <Box sx={{ maxWidth: 380, width: "100%", mx: "auto", mt: { xs: 1.5, sm: 2 } }}>
+          <TransferFlow
+            mode={type === "Lent" ? "out" : type === "Borrowed" ? "in" : "exchange"}
+            tone={type === "Lent" ? "#10B981" : type === "Borrowed" ? "#EF4444" : "#0A84FF"}
+            personName={person}
+          />
+        </Box>
+
         {/* Person Name Autocomplete */}
         <Box>
           <Autocomplete

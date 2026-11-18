@@ -18,11 +18,11 @@ import {
   Chip,
   ToggleButtonGroup,
   ToggleButton,
+  Switch,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import CloudSyncIcon from "@mui/icons-material/CloudSync";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import NightsStayOutlinedIcon from "@mui/icons-material/NightsStayOutlined";
@@ -30,7 +30,9 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import AnimationIcon from "@mui/icons-material/Animation";
 import { ThemeContext } from "../ThemeContext";
+import { SyncCloud } from "./FinanceAnimations";
 import {
   getAuthUser,
   syncOfflineQueue,
@@ -118,7 +120,7 @@ export default function SettingsModal({
   onLogout,
 }) {
   const theme = useTheme();
-  const { activeTheme, setTheme } = useContext(ThemeContext);
+  const { activeTheme, setTheme, animationsOn, setAnimationsOn } = useContext(ThemeContext);
   const fileInputRef = useRef(null);
 
   const userObj = currentUser || getAuthUser();
@@ -198,18 +200,20 @@ export default function SettingsModal({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: { xs: "24px 24px 0 0", sm: 3.5 },
-          m: { xs: 0, sm: 2 },
-          position: { xs: "fixed", sm: "relative" },
-          bottom: { xs: 0, sm: "auto" },
-          width: { xs: "100%", sm: "auto" },
-          maxHeight: { xs: "92vh", sm: "88vh" },
+          // centred card on every screen size (no bottom sheet on mobile)
+          borderRadius: 3.5,
+          m: 2,
+          width: { xs: "calc(100% - 32px)", sm: "auto" },
+          maxHeight: { xs: "85vh", sm: "88vh" },
           background:
             theme.palette.mode === "dark"
               ? "linear-gradient(175deg, #18191d 0%, #101114 100%)"
               : "#ffffff",
-          backdropFilter: "blur(30px) saturate(180%)",
-          WebkitBackdropFilter: "blur(30px) saturate(180%)",
+          // No frosted-glass blur: the background above is opaque, so the blur showed nothing,
+          // but it put the card on its own GPU layer. Centred, that layer can sit on a
+          // half pixel, which renders the text blurry on phones.
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
           border: `1px solid ${theme.palette.divider}`,
           boxShadow: "0 24px 60px rgba(0, 0, 0, 0.7)",
           overflow: "hidden",
@@ -218,25 +222,6 @@ export default function SettingsModal({
         },
       }}
     >
-      {/* Mobile Top Grab Bar */}
-      <Box
-        sx={{
-          pt: 1.2,
-          pb: 0.4,
-          display: { xs: "flex", sm: "none" },
-          justifyContent: "center",
-        }}
-      >
-        <Box
-          sx={{
-            width: 38,
-            height: 4.5,
-            borderRadius: 3,
-            bgcolor: "rgba(148, 163, 184, 0.25)",
-          }}
-        />
-      </Box>
-
       {/* Header Bar */}
       <Box
         sx={{
@@ -260,10 +245,12 @@ export default function SettingsModal({
           Settings
         </Typography>
 
+        {/* Desktop only: on mobile, tap outside the card to close it */}
         <Button
           onClick={onClose}
           size="small"
           sx={{
+            display: { xs: "none", sm: "inline-flex" },
             fontWeight: 800,
             fontSize: "0.92rem",
             textTransform: "none",
@@ -309,6 +296,8 @@ export default function SettingsModal({
         {/* 1. SIMPLE & FREE PROFILE HEADER */}
         <Box
           sx={{
+            position: "relative",
+            overflow: "hidden",
             p: 2,
             borderRadius: 3,
             bgcolor:
@@ -323,8 +312,36 @@ export default function SettingsModal({
             gap: 2,
           }}
         >
+          {/* One-off premium sheen across the profile card each time Settings opens */}
+          {open && (
+            <Box
+              aria-hidden="true"
+              className="af-sheen"
+              sx={{
+                "--af-sheen": isUserPremium(userObj)
+                  ? "rgba(229, 193, 88, 0.2)"
+                  : `${theme.palette.primary.main}24`,
+              }}
+            />
+          )}
+
           {/* Avatar with tap-to-change */}
           <Box sx={{ position: "relative" }}>
+            {/* Slowly orbiting accent ring around the profile photo */}
+            <Box
+              aria-hidden="true"
+              className="af-ring"
+              sx={{
+                background: `conic-gradient(from 0deg, ${
+                  isUserPremium(userObj) ? "#E5C158" : theme.palette.primary.main
+                }, transparent 30%, ${
+                  isUserPremium(userObj) ? "#E5C158" : theme.palette.primary.main
+                } 50%, transparent 80%, ${
+                  isUserPremium(userObj) ? "#E5C158" : theme.palette.primary.main
+                })`,
+                animationPlayState: open ? "running" : "paused",
+              }}
+            />
             <Box
               onClick={() => fileInputRef.current?.click()}
               sx={{
@@ -620,6 +637,45 @@ export default function SettingsModal({
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>
+
+          {/* Animations on/off (on by default, regardless of the OS setting) */}
+          <Box
+            sx={{
+              mt: 1,
+              px: 2,
+              py: 0.9,
+              borderRadius: 3,
+              bgcolor:
+                theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.03)"
+                  : "rgba(0, 0, 0, 0.02)",
+              border: `1px solid ${theme.palette.divider}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Box display="flex" alignItems="center" gap={1.2}>
+              <AnimationIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
+              <Box>
+                <Typography variant="body2" fontWeight="600" sx={{ fontSize: "0.88rem" }}>
+                  Animations
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ color: theme.palette.text.secondary, fontSize: "0.72rem" }}
+                >
+                  Motion effects across the app
+                </Typography>
+              </Box>
+            </Box>
+            <Switch
+              checked={animationsOn}
+              onChange={(e) => setAnimationsOn(e.target.checked)}
+              color="primary"
+              slotProps={{ input: { "aria-label": "Animations" } }}
+            />
+          </Box>
         </Box>
 
         {/* 3. SIMPLE PRIVACY & CLOUD SETTINGS */}
@@ -662,7 +718,17 @@ export default function SettingsModal({
               }}
             >
               <Box display="flex" alignItems="center" gap={1.2}>
-                <CloudSyncIcon sx={{ fontSize: 18, color: "#0A84FF" }} />
+                <SyncCloud
+                  state={
+                    syncLoading
+                      ? "syncing"
+                      : syncStatus === "Synced!"
+                      ? "done"
+                      : syncStatus === "Failed"
+                      ? "failed"
+                      : "idle"
+                  }
+                />
                 <Box>
                   <Typography
                     variant="body2"
@@ -769,9 +835,11 @@ export default function SettingsModal({
               borderRadius: "14px",
               textTransform: "none",
               transition: "all 0.15s ease",
+              "& .MuiButton-startIcon": { transition: "transform 0.25s ease" },
               "&:hover": {
                 bgcolor: "rgba(255, 69, 58, 0.16)",
               },
+              "&:hover .MuiButton-startIcon": { transform: "translateX(3px)" },
             }}
           >
             Sign Out

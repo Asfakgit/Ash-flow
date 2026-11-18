@@ -64,6 +64,7 @@ import {
   adminGetPremiumAudits,
   adminSetupSheets,
 } from '../Services/SheetService';
+import { EmptyState } from './FinanceAnimations';
 
 const SUBSCRIPTION_PLANS = [
   { id: '1M', label: 'Monthly', period: '1 Month', days: 30 },
@@ -975,8 +976,11 @@ export default function AdminUserModal({
                 justifyContent: 'center',
                 color: '#fff',
                 boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                position: 'relative',
               }}
             >
+              {/* "Live console" pulse */}
+              <Box aria-hidden="true" className="af-ping-ring" sx={{ color: '#10b981' }} />
               <AdminPanelSettingsIcon sx={{ fontSize: 26 }} />
             </Box>
             <Box>
@@ -1152,6 +1156,8 @@ export default function AdminUserModal({
           {/* Card 1: Total Users */}
           <Paper
             elevation={0}
+            className="af-rise"
+            style={{ animationDelay: "0.1s" }}
             sx={{
               p: 2.2,
               borderRadius: 2.5,
@@ -1179,6 +1185,8 @@ export default function AdminUserModal({
           {/* Card 2: Pending Approval */}
           <Paper
             elevation={0}
+            className="af-rise"
+            style={{ animationDelay: "0.18s" }}
             sx={{
               p: 2.2,
               borderRadius: 2.5,
@@ -1227,6 +1235,8 @@ export default function AdminUserModal({
           {/* Card 3: Active Premium */}
           <Paper
             elevation={0}
+            className="af-rise"
+            style={{ animationDelay: "0.26s" }}
             sx={{
               p: 2.2,
               borderRadius: 2.5,
@@ -1263,6 +1273,8 @@ export default function AdminUserModal({
           {/* Card 4: Subscription Revenue */}
           <Paper
             elevation={0}
+            className="af-rise"
+            style={{ animationDelay: "0.34s" }}
             sx={{
               p: 2.2,
               borderRadius: 2.5,
@@ -1381,11 +1393,12 @@ export default function AdminUserModal({
 
         {/* 3. Member Directory Cards (Standard, Rush-Free, Spacious) */}
         {loading ? (
-          <Box textAlign="center" py={7}>
-            <CircularProgress size={38} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          <Box textAlign="center" py={7} display="flex" justifyContent="center">
+            <EmptyState variant="loading">
+            <Typography variant="body2" color="text.secondary">
               Loading member records from Google Sheets...
             </Typography>
+            </EmptyState>
           </Box>
         ) : filteredUsers.length === 0 ? (
           <Paper
@@ -1415,7 +1428,7 @@ export default function AdminUserModal({
           </Paper>
         ) : (
           <Box display="flex" flexDirection="column" gap={2}>
-            {filteredUsers.map((u) => {
+            {filteredUsers.map((u, userIdx) => {
               const isCurrentAdmin =
                 u.username === currentUser?.username || u.role === 'ADMIN';
 
@@ -1423,6 +1436,8 @@ export default function AdminUserModal({
                 <Paper
                   key={u.id || u.username}
                   elevation={0}
+                  className="af-row"
+                  style={{ animationDelay: `${Math.min(userIdx, 10) * 45}ms` }}
                   sx={{
                     p: { xs: 2.2, sm: 2.8 },
                     borderRadius: 3,

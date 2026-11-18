@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useContext } from "react";
 import {
   Container,
   Box,
   Typography,
   ThemeProvider,
   CssBaseline,
-  Fade,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -18,6 +17,8 @@ import PersonBalance from "./Components/PersonBalance";
 import CustomDialog from "./Components/CustomDialog";
 import ReportsModal from "./Components/ReportsModal";
 import AdminUserModal from "./Components/AdminUserModal";
+import { MotionStyles, DashboardHero, WelcomeSplash } from "./Components/FinanceAnimations";
+import { ThemeContext } from "./ThemeContext";
 
 import useTransactions from "./Hooks/useTransactions";
 import {
@@ -76,7 +77,18 @@ function App() {
   });
 
   const [refresh, setRefresh] = useState(false);
-  const { transactions, setTransactions } = useTransactions(refresh);
+
+  // Short animated welcome intro: after signing in, and once per app session.
+  const { animationsOn } = useContext(ThemeContext);
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      return isUserAuthenticated() && !sessionStorage.getItem("ashflow_splash_seen");
+    } catch {
+      return false;
+    }
+  });
+  const hideSplash = useCallback(() => setShowSplash(false), []);
+  const { transactions, setTransactions, loading: transactionsLoading } = useTransactions(refresh);
   const [reportsOpen, setReportsOpen] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -130,6 +142,7 @@ function App() {
   const handleLogin = (user) => {
     localStorage.setItem("isAuthenticated", "true");
     setIsAuthenticated(true);
+    setShowSplash(true);
     setCurrentUser(user || getAuthUser());
     triggerRefresh();
   };
@@ -335,6 +348,7 @@ function App() {
     return (
       <>
         <CssBaseline />
+        <MotionStyles />
         <Login onLogin={handleLogin} />
       </>
     );
@@ -343,6 +357,7 @@ function App() {
   return (
     <>
       <CssBaseline />
+      <MotionStyles />
       <Box
         sx={{
           minHeight: "100vh",
@@ -369,51 +384,53 @@ function App() {
           sx={{ mt: { xs: 1.5, md: 3 }, px: { xs: 1.5, sm: 3 } }}
         >
           {currentUser?.role === "ADMIN" ? (
-            <AdminUserModal
-              inline={true}
-              currentUser={currentUser}
-              onUsersUpdated={(users) => {
-                const pending = users.filter((u) => u.status === "PENDING").length;
-                setPendingUsersCount(pending);
-              }}
-            />
+            <Box className="af-rise">
+              <AdminUserModal
+                inline={true}
+                currentUser={currentUser}
+                onUsersUpdated={(users) => {
+                  const pending = users.filter((u) => u.status === "PENDING").length;
+                  setPendingUsersCount(pending);
+                }}
+              />
+            </Box>
           ) : (
             <>
-              <Fade in timeout={600}>
-                <Box mb={{ xs: 3, md: 5 }} textAlign="center">
-                  <Typography
-                    variant="h3"
-                    fontWeight="800"
-                    sx={{
-                      fontSize: { xs: "1.6rem", sm: "2.25rem", md: "2.75rem" },
-                      background: theme.palette.custom.titleGradient,
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      mb: 0.5,
-                      letterSpacing: "-0.03em",
-                    }}
-                  >
-                    Financial Overview
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      color: theme.palette.text.secondary,
-                      maxWidth: 580,
-                      mx: "auto",
-                      fontSize: { xs: "0.85rem", sm: "1rem" },
-                      px: 1,
-                    }}
-                  >
-                    {dailyQuote}
-                  </Typography>
-                </Box>
-              </Fade>
+              {/* Animated hero: growth chart, coin stacks & piggy bank behind the title */}
+              <DashboardHero>
+                <Typography
+                  variant="h3"
+                  fontWeight="800"
+                  sx={{
+                    fontSize: { xs: "1.6rem", sm: "2.25rem", md: "2.75rem" },
+                    background: theme.palette.custom.titleGradient,
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    mb: 0.5,
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  Financial Overview
+                </Typography>
+                <Typography
+                  variant="body1"
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    maxWidth: 580,
+                    mx: "auto",
+                    fontSize: { xs: "0.85rem", sm: "1rem" },
+                    px: 1,
+                  }}
+                >
+                  {dailyQuote}
+                </Typography>
+              </DashboardHero>
 
               {/* Person Balances - Primary Focus with "+ Add Transaction" Button */}
-              <Box mb={{ xs: 3, md: 4.5 }}>
+              <Box mb={{ xs: 3, md: 4.5 }} className="af-rise" style={{ animationDelay: "0.12s" }}>
                 <PersonBalance
                   transactions={transactions}
+                  loading={transactionsLoading}
                   setTransactions={setTransactions}
                   triggerRefresh={triggerRefresh}
                   showNotification={showNotification}
@@ -440,9 +457,10 @@ function App() {
                 />
               </Box>
 
-              <Box>
+              <Box className="af-rise" style={{ animationDelay: "0.24s" }}>
                 <Transactions
                   transactions={transactions}
+                  loading={transactionsLoading}
                   setTransactions={setTransactions}
                   triggerRefresh={triggerRefresh}
                   showNotification={showNotification}
@@ -474,6 +492,9 @@ function App() {
           initialPerson={addModalDefaults.person}
           initialType={addModalDefaults.type}
         />
+
+        {/* Welcome intro (fades by itself; taps pass straight through) */}
+        {showSplash && animationsOn && <WelcomeSplash onDone={hideSplash} />}
 
         {/* Reports & Analytics Modal */}
         <ReportsModal
