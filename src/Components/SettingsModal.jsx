@@ -33,6 +33,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import AnimationIcon from "@mui/icons-material/Animation";
 import { ThemeContext } from "../ThemeContext";
 import { SyncCloud } from "./FinanceAnimations";
+import AdminContact from "./AdminContact";
 import {
   getAuthUser,
   syncOfflineQueue,
@@ -277,6 +278,8 @@ export default function SettingsModal({
           display: "flex",
           flexDirection: "column",
           gap: 2.4,
+          // sections keep their size and the content scrolls, instead of squashing to fit
+          "& > *": { flexShrink: 0 },
           "&::-webkit-scrollbar": { width: "4px" },
           "&::-webkit-scrollbar-thumb": {
             backgroundColor: "rgba(148, 163, 184, 0.2)",
@@ -558,6 +561,39 @@ export default function SettingsModal({
             </Box>
           </Box>
         </Box>
+
+        {/* Premium is activated by the admin: members ask for it (or a renewal) on WhatsApp */}
+        {!isAdmin && !isUserPremium(userObj) && (
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 3,
+              border: "1px solid rgba(229, 193, 88, 0.35)",
+              bgcolor: "rgba(229, 193, 88, 0.06)",
+            }}
+          >
+            <Box display="flex" alignItems="center" gap={1} mb={0.4}>
+              <WorkspacePremiumIcon sx={{ fontSize: 20, color: "#E5C158" }} />
+              <Typography
+                variant="subtitle2"
+                fontWeight="800"
+                sx={{ color: theme.palette.mode === "dark" ? "#F5D77F" : "#B7791F" }}
+              >
+                Get Premium
+              </Typography>
+            </Box>
+            <Typography
+              variant="body2"
+              sx={{ color: theme.palette.text.secondary, fontSize: "0.82rem", mb: 1.4 }}
+            >
+              Premium is activated by the admin. Message them on WhatsApp to subscribe or renew.
+            </Typography>
+            <AdminContact
+              title={null}
+              message={`Hi, I'd like Ash Flow Premium for my account @${userObj?.username || ""}.`}
+            />
+          </Box>
+        )}
 
         {/* 2. FREE & SIMPLE APPEARANCE PICKER */}
         <Box>

@@ -13,9 +13,11 @@ import avatar from '../assets/login-avatar.png';
  *      recovers, the card glides back, and he steps back and leans on it again.
  *      That relaxed lean is his final pose.
  *      Narrow screens (no room beside the card): he watches from behind the
- *      card's top edge, then jumps up and lands sitting upright on that edge,
- *      near the card's right corner, legs hanging over the card's front, clear
- *      of every field and button, and waves.
+ *      card's top edge, side-steps behind it to its right corner, then does a
+ *      standard jump (crouch, push off, knees up at the top of a clean arc,
+ *      hands catching the ledge as he lands) and sits upright on that edge,
+ *      legs hanging over the card's front, clear of every field and button,
+ *      and waves.
  *   5. He mimes typing; afterwards he types along whenever the user types
  *      (one-handed while leaning, on his lap while sitting).
  *
@@ -54,15 +56,16 @@ const BACK = 5.5; // card glides back to the centre
 const BACK_END = 6.05;
 const STEP_BACK = 6.2; // wide: steps back to the card's edge…
 const LEAN_AGAIN = 6.5; // …and leans on it again (final pose)
-// narrow: jumps over the card's top edge and sits down inside the card
-const READY = 4.4;
-const SQUAT = 4.66;
-const LIFT = 4.8;
-const PEAK = 5.08; // clears the card's edge: from here on he is in front of it
-const SIT = 5.36;
-const SETTLE = 5.56;
-const WAVE = 5.8;
-const WAVE_END = 6.6;
+// narrow: shuffles behind the card to its corner, then a standard jump up onto its top edge
+const READY = 4.18; // watching from behind the card…
+const SHUFFLE_END = 4.84; // …side-steps behind it to below the corner (3 small steps)…
+const DIP = 5.0; // …anticipation: crouches, arms back (held briefly)…
+const PUSH = 5.16; // …take-off: fully stretched, leaves the ground…
+const PEAK = 5.38; // …top of the arc, knees up: from here on he is in front of the card…
+const SIT = 5.6; // …touches down sitting on the edge, hands catching the ledge…
+const SETTLE = 5.8; // …and settles
+const WAVE = 5.96;
+const WAVE_END = 6.62;
 const TYPE_IN = 6.72;
 const TYPE_START = 6.9;
 const TYPE_END = 7.35;
@@ -354,7 +357,7 @@ const frontPoses = (key) => {
       leanType: { ...lean, fHead: -2, fLu: 10, fLl: -58, fLk: 0.42 },
     };
   }
-  // narrow screens: jump over the card's top edge and sit upright on it, like on a bench:
+  // narrow screens: jump up onto the card's top edge and sit upright on it, like on a bench:
   // thighs toward the viewer, knees apart, shins hanging over the card's front, feet together
   const seat = (o = {}) => G({ fLf: SIT_THIGH, fRf: SIT_THIGH, fLt: 16, fLs: -25, fRt: -16, fRs: 25, ...o });
   const lap = 124; // hands resting on the thighs, by the hips
@@ -362,10 +365,17 @@ const frontPoses = (key) => {
   const waveA = reach(reach(seat({ fHead: -3 }), 'L', [57, lap]), 'R', [106, 100]);
   return {
     ready: G({ fHead: 3 }),
-    squat: G({ fRoot: [0, 10, 0], fHead: 4, fLu: 25, fLl: 10, fRu: -25, fRl: -10, fLt: 18, fLs: -30, fRt: -18, fRs: 30 }),
-    lift: G({ fRoot: [0, -4, 0], fHead: -4, fLu: 165, fLl: 5, fRu: -165, fRl: -5, fLt: -2, fRt: 2 }),
-    tuck: G({ fRoot: [0, 30, 0], fHead: -6, fLu: 140, fLl: 20, fRu: -140, fRl: -20, fLt: 35, fLs: -75, fRt: -35, fRs: 75 }),
-    land: handsInLap(seat({ fRoot: [0, 3, 0], fHead: 6, fLs: -32, fRs: 32 })),
+    // side-stepping behind the card: a small sway from foot to foot
+    stepL: G({ fRoot: [0, 1, -2.5], fHead: 2, fLu: 8, fRu: -2 }),
+    stepR: G({ fRoot: [0, 1, 2.5], fHead: -1, fLu: 2, fRu: -8 }),
+    // a standard jump: anticipation (knees bent, hips down, arms back)…
+    dip: G({ fRoot: [0, 16, 0], fHead: 6, fLu: 16, fLl: 6, fRu: -16, fRl: -6, fLt: 22, fLs: -40, fRt: -22, fRs: 40 }),
+    // …take-off (body fully stretched, arms swung forward to shoulder height)…
+    push: reach(reach(G({ fRoot: [0, -5, 0], fHead: -5, fLt: -1, fLs: 1, fRt: 1, fRs: -1 }), 'L', [57, 70], 0.6), 'R', [83, 70], 0.6),
+    // …in the air (knees drawn up, arms out for balance)…
+    tuck: G({ fRoot: [0, 18, 0], fHead: -2, fLu: 62, fLl: 24, fRu: -62, fRl: -24, fLf: 0.62, fRf: 0.62, fLt: 18, fLs: -36, fRt: -18, fRs: 36 }),
+    // …touch-down on the edge: a soft bounce, hands catching the ledge beside his hips
+    land: reach(reach(seat({ fRoot: [0, 4, 0], fHead: 6, fLs: -34, fRs: 34 }), 'L', [46, 127]), 'R', [94, 127]),
     sit: handsInLap(seat()),
     waveA,
     waveB: { ...waveA, fRl: waveA.fRl + 26 },
@@ -519,18 +529,20 @@ function buildVariantCss(key) {
         { t: IDLE, pose: fp.lean },
       ]
     : [
-        // squat, spring up over the card's edge, land sitting in its corner, wave
+        // side-step behind the card to the corner, then a standard jump onto its edge, wave
         { t: READY, pose: fp.ready, ease: 'ease-in-out' },
-        { t: SQUAT, pose: fp.squat, ease: 'ease-out' },
-        { t: LIFT, pose: fp.lift, ease: 'ease-out' },
-        { t: PEAK, pose: fp.tuck, ease: 'ease-in' },
+        ...[0, 1, 2].map((i) => ({ t: READY + ((SHUFFLE_END - READY) * (i + 0.5)) / 3, pose: i % 2 ? fp.stepR : fp.stepL, ease: 'ease-in-out' })),
+        { t: SHUFFLE_END, pose: fp.ready, ease: 'ease-in-out' },
+        { t: DIP, pose: fp.dip, ease: 'linear' },
+        { t: DIP + 0.06, pose: fp.dip, ease: 'cubic-bezier(.3,0,.2,1)' }, // a beat at the bottom, then a quick push
+        { t: PUSH, pose: fp.push, ease: 'ease-out' },
+        { t: PEAK, pose: fp.tuck, ease: 'ease-in-out' },
         { t: SIT, pose: fp.land, ease: 'ease-out' },
         { t: SETTLE, pose: fp.sit, ease: 'ease-in-out' },
         { t: WAVE, pose: fp.waveA, ease: 'ease-in-out' },
-        { t: WAVE + 0.15, pose: fp.waveB, ease: 'ease-in-out' },
-        { t: WAVE + 0.3, pose: fp.waveA, ease: 'ease-in-out' },
-        { t: WAVE + 0.45, pose: fp.waveB, ease: 'ease-in-out' },
-        { t: WAVE + 0.6, pose: fp.waveA, ease: 'ease-in-out' },
+        { t: WAVE + 0.16, pose: fp.waveB, ease: 'ease-in-out' },
+        { t: WAVE + 0.32, pose: fp.waveA, ease: 'ease-in-out' },
+        { t: WAVE + 0.48, pose: fp.waveB, ease: 'ease-in-out' },
         { t: WAVE_END, pose: fp.sit, ease: 'linear' },
         { t: TYPE_IN, pose: fp.sit, ease: 'ease-in-out' },
         { t: TYPE_START, pose: fp.typing, ease: 'linear' },
@@ -591,22 +603,36 @@ function buildVariantCss(key) {
     // A jump just high enough for his tucked feet to clear the card's top edge at PEAK.
     const lowest = Math.max(...frontLegPoints(fp.tuck).map((pt) => pt[1])) + 6;
     const jump = groundY + (lowest - GROUND) * s + 8;
+    // First he side-steps behind the card to right below the seat, so the jump itself is a
+    // clean, nearly vertical arc (no long sideways leap).
     charStops.push(
-      { t: LIFT, css: `left:${finalLeft};bottom:${charBottom};opacity:1`, ease: 'linear' },
-      { t: PEAK, css: `bottom:${charBottom}`, ease: 'linear' },
+      { t: READY, css: `left:${finalLeft};bottom:${charBottom};opacity:1`, ease: 'cubic-bezier(.45,0,.55,1)' },
+      { t: SHUFFLE_END, css: `left:${seatLeft};bottom:${charBottom};opacity:1`, ease: 'linear' },
+      { t: PEAK, css: `left:${seatLeft};bottom:${charBottom};opacity:1`, ease: 'linear' },
       { t: SIT, css: `left:${seatLeft};bottom:${seatBottom};opacity:1` },
       { t: T, css: `left:${seatLeft};bottom:${seatBottom};opacity:1` },
     );
+    // a small bob per side-step, then the arc: rising fast and slowing to the top (ease-out),
+    // falling slowly then faster onto the edge (ease-in)
+    const bob = px(-3 * s);
+    const stepT = (SHUFFLE_END - READY) / 3;
+    hopStops.push({ t: READY, css: 'transform:translateY(0)', ease: 'ease-out' });
+    for (let i = 0; i < 3; i++) {
+      hopStops.push(
+        { t: READY + stepT * (i + 0.5), css: `transform:translateY(${bob})`, ease: 'ease-in' },
+        { t: READY + stepT * (i + 1), css: 'transform:translateY(0)', ease: 'linear' },
+      );
+    }
     hopStops.push(
-      { t: LIFT, css: 'transform:translateY(0)', ease: 'cubic-bezier(.25,.7,.45,1)' },
-      { t: PEAK, css: `transform:translateY(${px(-jump)})`, ease: 'cubic-bezier(.55,0,.75,.35)' },
+      { t: PUSH - 0.04, css: 'transform:translateY(0)', ease: 'cubic-bezier(.22,.61,.36,1)' },
+      { t: PEAK, css: `transform:translateY(${px(-jump)})`, ease: 'cubic-bezier(.55,.06,.68,.19)' },
       { t: SIT, css: 'transform:translateY(0)' },
     );
-    // no floor under his dangling feet: the shadow stays gone once he jumps
+    // no floor under his dangling feet: the shadow goes as he leaves the ground
     shadowEnd = 'transform:translateX(0) scale(.6);opacity:0';
     shadowStops.push(
-      { t: LIFT, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'ease-out' },
-      { t: LIFT + 0.1, css: shadowEnd },
+      { t: PUSH - 0.04, css: 'transform:translateX(0) scale(1);opacity:1', ease: 'ease-out' },
+      { t: PUSH + 0.08, css: shadowEnd },
     );
   }
   shadowStops.push({ t: T, css: shadowEnd });

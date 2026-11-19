@@ -23,15 +23,20 @@ import LoginIcon from '@mui/icons-material/Login';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CloseIcon from '@mui/icons-material/Close';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import logo from '../assets/logo.png';
 import LoginScene from './LoginScene';
 import { AmbientBackdrop, SuccessBurst } from './FinanceAnimations';
+import AdminContact from './AdminContact';
 import { loginUser, registerUser, requestPasswordReset } from '../Services/SheetService';
 
-// Shown to accounts that are still waiting for admin approval.
-const ADMIN_WHATSAPP = '918089974243'; // country code + number, as wa.me expects
-const ADMIN_WHATSAPP_LABEL = '+91 8089974243';
+// Pre-filled WhatsApp message to the admin, per sign-in result that needs the admin to act.
+const ADMIN_ASK = {
+  PENDING: (u) => `Hi, I registered on Ash Flow as @${u}. Please approve my account.`,
+  RESET_PENDING: (u) => `Hi, I asked for a password reset for my Ash Flow account @${u}. Please approve it.`,
+  REJECTED: (u) => `Hi, my Ash Flow registration @${u} was rejected. Please review it.`,
+  DISABLED: (u) => `Hi, my Ash Flow account @${u} is disabled. Please enable it.`,
+  OTHER: (u) => `Hi, I can't sign in to my Ash Flow account @${u}. Please help.`,
+};
 
 const Login = ({ onLogin }) => {
   const theme = useTheme();
@@ -48,7 +53,8 @@ const Login = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
-  const [pendingApproval, setPendingApproval] = useState(false); // infoMessage is a pending-approval notice
+  // Set when the sign-in result needs the admin to act: a key of ADMIN_ASK
+  const [adminNeed, setAdminNeed] = useState(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
   // Check for forced logout notices (e.g. membership change)
@@ -122,6 +128,7 @@ const Login = ({ onLogin }) => {
     setTabIndex(newValue);
     setError('');
     setInfoMessage('');
+    setAdminNeed(null);
     setRegistrationSuccess(false);
   };
 
@@ -129,7 +136,7 @@ const Login = ({ onLogin }) => {
     e.preventDefault();
     setError('');
     setInfoMessage('');
-    setPendingApproval(false);
+    setAdminNeed(null);
 
     if (!username.trim() || !password) {
       setError('Please enter both username and password.');
@@ -143,7 +150,13 @@ const Login = ({ onLogin }) => {
       if (res.success) {
         onLogin(res.user, res.token);
       } else {
-        if (
+        if (res.status === 'RESET_PENDING') {
+          setInfoMessage(
+            res.message ||
+              'Your password reset request is pending admin approval. You will be able to log in once it is approved.'
+          );
+          setAdminNeed('RESET_PENDING');
+        } else if (
           res.status === 'PENDING' ||
           (res.message && res.message.toLowerCase().includes('pending'))
         ) {
@@ -151,15 +164,21 @@ const Login = ({ onLogin }) => {
             res.message ||
               'Your account is pending admin approval. You will be able to log in once the administrator approves it.'
           );
-          setPendingApproval(true);
+          setAdminNeed('PENDING');
         } else if (res.status === 'REJECTED') {
           setError(
             res.message || 'Your account registration was rejected by the administrator.'
           );
+          setAdminNeed('REJECTED');
         } else if (res.status === 'DISABLED') {
           setError(
             res.message || 'Your account has been disabled. Please contact the administrator.'
           );
+          setAdminNeed('DISABLED');
+        } else if (res.status && res.status !== 'ERROR') {
+          // any other account status the server blocks sign-in for ('ERROR' = wrong credentials)
+          setError(res.message || 'Your account cannot sign in right now. Please contact the administrator.');
+          setAdminNeed('OTHER');
         } else {
           setError(res.message || 'Invalid username or password.');
         }
@@ -176,6 +195,7 @@ const Login = ({ onLogin }) => {
     e.preventDefault();
     setError('');
     setInfoMessage('');
+    setAdminNeed(null);
 
     const cleanUsername = username.trim().toLowerCase();
     const cleanFullName = fullName.trim();
@@ -384,6 +404,11 @@ const Login = ({ onLogin }) => {
                 </span>{' '}
                 admin approval. Once approved, you can log in to access your separate personal sheet.
               </Typography>
+              <AdminContact
+                title="Need it sooner? Contact admin on WhatsApp"
+                message={ADMIN_ASK.PENDING(username)}
+                sx={{ mb: 3 }}
+              />
               <Button
                 fullWidth
                 variant="contained"
@@ -408,6 +433,9 @@ const Login = ({ onLogin }) => {
               {error && (
                 <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
                   {error}
+                  {['REJECTED', 'DISABLED', 'OTHER'].includes(adminNeed) && (
+                    <AdminContact sx={{ mt: 1.2 }} message={ADMIN_ASK[adminNeed](username.trim())} />
+                  )}
                 </Alert>
               )}
               {infoMessage && (
@@ -427,40 +455,17 @@ const Login = ({ onLogin }) => {
                     fontWeight="800"
                     sx={{ mb: 0.3, color: '#f59e0b', fontSize: '0.9rem' }}
                   >
-                    Account Pending Approval
+                    {adminNeed === 'RESET_PENDING'
+                      ? 'Password Reset Pending'
+                      : adminNeed === 'PENDING'
+                        ? 'Account Pending Approval'
+                        : 'Notice'}
                   </Typography>
                   <Typography variant="body2" sx={{ fontSize: '0.84rem', lineHeight: 1.4 }}>
                     {infoMessage}
                   </Typography>
-                  {pendingApproval && (
-                    <Box sx={{ mt: 1.2 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontSize: '0.84rem', fontWeight: 700, mb: 0.8 }}
-                      >
-                        Contact admin on WhatsApp
-                      </Typography>
-                      <Button
-                        component="a"
-                        href={`https://wa.me/${ADMIN_WHATSAPP}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        size="small"
-                        variant="contained"
-                        startIcon={<WhatsAppIcon />}
-                        sx={{
-                          bgcolor: '#25D366',
-                          color: '#ffffff',
-                          fontWeight: 700,
-                          textTransform: 'none',
-                          borderRadius: 2,
-                          boxShadow: 'none',
-                          '&:hover': { bgcolor: '#1DA851', boxShadow: 'none' },
-                        }}
-                      >
-                        {ADMIN_WHATSAPP_LABEL}
-                      </Button>
-                    </Box>
+                  {(adminNeed === 'PENDING' || adminNeed === 'RESET_PENDING') && (
+                    <AdminContact sx={{ mt: 1.2 }} message={ADMIN_ASK[adminNeed](username.trim())} />
                   )}
                 </Alert>
               )}
@@ -763,9 +768,14 @@ const Login = ({ onLogin }) => {
             <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
               Request Submitted!
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
               {forgotSuccess}
             </Typography>
+            <AdminContact
+              title="Need it sooner? Contact admin on WhatsApp"
+              message={ADMIN_ASK.RESET_PENDING(forgotUsername.trim())}
+              sx={{ mb: 3 }}
+            />
             <Button
               variant="contained"
               fullWidth
